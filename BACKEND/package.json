@@ -1,0 +1,39 @@
+{
+  "name": "audio-scrapper",
+  "version": "1.0.0",
+  "description": "Advanced audio scraper for various music platforms using Puppeteer",
+  "main": "advanced_scraper.js",
+  "scripts": {
+    "start": "node server.js",
+    "server": "node server.js",
+    "dev": "cross-env HEADLESS=false nodemon server.js",
+    "prod": "cross-env NODE_ENV=production HEADLESS=true node server.js",
+    "web": "node server.js"
+  },
+  "keywords": [
+    "audio",
+    "scraper",
+    "music",
+    "puppeteer",
+    "download",
+    "jiosaavn",
+    "spotify",
+    "soundcloud"
+  ],
+  "author": "ARYAN",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2",
+    "puppeteer": "^22.8.2"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
