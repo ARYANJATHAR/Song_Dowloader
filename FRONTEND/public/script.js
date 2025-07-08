@@ -7,6 +7,7 @@ const resultContainer = document.getElementById('resultContainer');
 const downloadBtn = document.getElementById('downloadBtn');
 
 let currentDownloadId = null;
+let downloadStartTime = null;
 
 // Show status panel by default
 document.addEventListener('DOMContentLoaded', function() {
@@ -42,7 +43,7 @@ form.addEventListener('submit', async (e) => {
 async function startDirectDownload(songUrl) {
     try {
         showStatusPanel();
-        updateUIState('downloading', 'Starting direct download...', 0);
+        updateUIState('downloading', 'Starting... 0%', 0, 'fas fa-download');
 
         const response = await fetch('/api/direct-download', {
             method: 'POST',
@@ -57,7 +58,10 @@ async function startDirectDownload(songUrl) {
         }
 
         currentDownloadId = data.downloadId;
-        checkDownloadStatus();
+        downloadStartTime = Date.now();
+        
+        // Start checking status after a brief delay
+        setTimeout(checkDownloadStatus, 500);
 
     } catch (error) {
         showError('Failed to start download: ' + error.message);
@@ -68,7 +72,7 @@ async function startDirectDownload(songUrl) {
 async function startDownload(songName, artist) {
     try {
         showStatusPanel();
-        updateUIState('searching', 'Searching for your song...', 0);
+        updateUIState('searching', 'Starting... 0%', 0, 'fas fa-search');
 
         const response = await fetch('/api/search-and-download', {
             method: 'POST',
@@ -83,7 +87,10 @@ async function startDownload(songName, artist) {
         }
 
         currentDownloadId = data.downloadId;
-        checkDownloadStatus();
+        downloadStartTime = Date.now();
+        
+        // Start checking status after a brief delay
+        setTimeout(checkDownloadStatus, 500);
 
     } catch (error) {
         showError('Failed to start download: ' + error.message);
@@ -107,7 +114,8 @@ async function checkDownloadStatus() {
             showError(data.error || 'Download failed');
             resetUI();
         } else {
-            setTimeout(checkDownloadStatus, 2000);
+            // Check more frequently for active downloads
+            setTimeout(checkDownloadStatus, 1000);
         }
 
     } catch (error) {
@@ -118,21 +126,47 @@ async function checkDownloadStatus() {
 
 function updateStatus(data) {
     const statusConfig = {
-        'searching': { icon: 'fas fa-search', text: 'Searching for audio...', class: 'searching' },
-        'downloading': { icon: 'fas fa-download', text: 'Downloading audio file...', class: 'downloading' },
-        'completed': { icon: 'fas fa-check', text: 'Download completed!', class: 'completed' },
-        'failed': { icon: 'fas fa-times', text: 'Download failed', class: 'failed' }
+        'searching': { icon: 'fas fa-search', text: 'Searching...', class: 'searching' },
+        'downloading': { icon: 'fas fa-download', text: 'Downloading...', class: 'downloading' },
+        'completed': { icon: 'fas fa-check', text: 'Completed!', class: 'completed' },
+        'failed': { icon: 'fas fa-times', text: 'Failed', class: 'failed' }
     };
 
     const config = statusConfig[data.status] || statusConfig['searching'];
-    updateUIState(config.class, config.text, data.progress || 0, config.icon);
+    const progress = data.progress || 0;
+    const statusText = `${config.text} ${progress}%`;
+    
+    updateUIState(config.class, statusText, progress, config.icon);
 }
 
 function updateUIState(status, text, progress, icon = 'fas fa-search') {
     statusIcon.className = `status-icon ${status}`;
     statusIcon.innerHTML = `<i class="${icon}"></i>`;
     statusText.textContent = text;
-    progressFill.style.width = progress + '%';
+    
+    // Smooth progress bar animation
+    const currentProgress = parseInt(progressFill.style.width) || 0;
+    animateProgress(currentProgress, progress);
+}
+
+function animateProgress(from, to) {
+    const duration = 500; // 500ms animation
+    const steps = 20;
+    const stepSize = (to - from) / steps;
+    const stepDuration = duration / steps;
+    
+    let currentStep = 0;
+    
+    const animate = () => {
+        if (currentStep <= steps) {
+            const currentValue = from + (stepSize * currentStep);
+            progressFill.style.width = Math.min(currentValue, to) + '%';
+            currentStep++;
+            setTimeout(animate, stepDuration);
+        }
+    };
+    
+    animate();
 }
 
 function showSuccess(data) {
@@ -201,6 +235,7 @@ function resetUI() {
         <span>Start Download</span>
     `;
     currentDownloadId = null;
+    downloadStartTime = null;
 }
 
 function setButtonLoading(loading) {
