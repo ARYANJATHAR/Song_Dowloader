@@ -101,11 +101,13 @@ body {
 }
 
 .button-group {
+    display: flex;
+    gap: 12px;
     margin-top: 30px;
 }
 
 .download-button {
-    width: 100%;
+    flex: 2;
     background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
     color: white;
     border: none;
@@ -119,6 +121,69 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
+}
+
+.clear-button {
+    flex: 1;
+    background: transparent;
+    color: #6b7280;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.download-another-button {
+    width: 100%;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.download-another-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+}
+
+.retry-button {
+    width: 100%;
+    background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.retry-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(245, 158, 11, 0.3);
 }
 
 .download-button:hover:not(:disabled) {
@@ -263,10 +328,12 @@ body {
     }
     
     .button-group {
+        flex-direction: column;
         margin-top: 25px;
     }
     
-    .download-button {
+    .download-button,
+    .clear-button {
         width: 100%;
     }
 }
@@ -294,7 +361,8 @@ body {
         font-size: 16px;
     }
     
-    .download-button {
+    .download-button,
+    .clear-button {
         padding: 14px 20px;
         font-size: 15px;
     }

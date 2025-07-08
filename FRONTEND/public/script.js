@@ -5,15 +5,32 @@ const statusIcon = document.getElementById('statusIcon');
 const progressFill = document.getElementById('progressFill');
 const resultContainer = document.getElementById('resultContainer');
 const downloadBtn = document.getElementById('downloadBtn');
+const clearBtn = document.getElementById('clearBtn');
 
 let currentDownloadId = null;
 let downloadStartTime = null;
+let lastDownloadedSong = null;
 
 // Show status panel by default when needed
 document.addEventListener('DOMContentLoaded', function() {
     // Hide status panel initially
     statusContainer.classList.remove('show');
 });
+
+// Clear form functionality
+clearBtn.addEventListener('click', function() {
+    clearForm();
+    showToast('Form cleared!', 'info');
+});
+
+// Clear form function
+function clearForm() {
+    document.getElementById('songName').value = '';
+    document.getElementById('artist').value = '';
+    statusContainer.classList.remove('show');
+    resultContainer.innerHTML = '';
+    resetUI();
+}
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -25,6 +42,12 @@ form.addEventListener('submit', async (e) => {
         showToast('Please enter a song name', 'error');
         return;
     }
+
+    // Store the attempted download info
+    lastDownloadedSong = {
+        songName: songName,
+        artist: artist
+    };
 
     startDownload(songName, artist);
 });
@@ -183,6 +206,13 @@ function animateProgress(from, to) {
 function showSuccess(data) {
     const fileSize = data.fileSize ? (data.fileSize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
     
+    // Store the last downloaded song info
+    lastDownloadedSong = {
+        songName: document.getElementById('songName').value,
+        artist: document.getElementById('artist').value,
+        downloadUrl: data.downloadUrl
+    };
+    
     resultContainer.innerHTML = `
         <div class="success-card">
             <i class="fas fa-check-circle" style="font-size: 36px; margin-bottom: 12px;"></i>
@@ -192,6 +222,10 @@ function showSuccess(data) {
                 <i class="fas fa-download"></i>
                 Download Audio File
             </a>
+            <button class="download-another-button" onclick="startNewDownload()">
+                <i class="fas fa-plus"></i>
+                Download Another Song
+            </button>
         </div>
     `;
 }
@@ -204,8 +238,37 @@ function showError(message) {
             <i class="fas fa-exclamation-triangle" style="font-size: 20px; margin-bottom: 8px;"></i>
             <strong>Error Occurred</strong><br>
             <div style="margin-top: 6px; opacity: 0.9; font-size: 0.85rem;">${formattedMessage}</div>
+            <button class="retry-button" onclick="retryLastDownload()">
+                <i class="fas fa-redo"></i>
+                Try Again
+            </button>
+            <button class="download-another-button" onclick="startNewDownload()">
+                <i class="fas fa-plus"></i>
+                Try Different Song
+            </button>
         </div>
     `;
+}
+
+// Function to start a new download (clears form)
+function startNewDownload() {
+    clearForm();
+    document.getElementById('songName').focus();
+    showToast('Ready for new download!', 'success');
+}
+
+// Function to retry the last download
+function retryLastDownload() {
+    if (lastDownloadedSong) {
+        document.getElementById('songName').value = lastDownloadedSong.songName;
+        document.getElementById('artist').value = lastDownloadedSong.artist;
+        resultContainer.innerHTML = '';
+        statusContainer.classList.remove('show');
+        resetUI();
+        showToast('Form restored. Click Download to retry!', 'info');
+    } else {
+        showToast('No previous download to retry', 'error');
+    }
 }
 
 function showStatusPanel() {
@@ -236,7 +299,7 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.style.animation = 'slideOutRight 0.3s ease-out';
         setTimeout(() => document.body.removeChild(toast), 300);
-    }, 3000);
+    }, 1500);
 }
 
 function resetUI() {
