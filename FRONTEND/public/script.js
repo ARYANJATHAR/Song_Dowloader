@@ -204,8 +204,6 @@ function animateProgress(from, to) {
 }
 
 function showSuccess(data) {
-    const fileSize = data.fileSize ? (data.fileSize / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
-    
     // Store the last downloaded song info
     lastDownloadedSong = {
         songName: document.getElementById('songName').value,
@@ -216,9 +214,9 @@ function showSuccess(data) {
     resultContainer.innerHTML = `
         <div class="success-card">
             <i class="fas fa-check-circle" style="font-size: 36px; margin-bottom: 12px;"></i>
-            <h3 style="margin-bottom: 8px; font-size: 1.1rem;">Download Completed!</h3>
-            <p style="margin-bottom: 16px; opacity: 0.9; font-size: 0.9rem;">File Size: ${fileSize}</p>
-            <a href="${data.downloadUrl}" class="download-link" download>
+            <h3 style="margin-bottom: 8px; font-size: 1.1rem;">Audio Found!</h3>
+            <p style="margin-bottom: 16px; opacity: 0.9; font-size: 0.9rem;">Ready to download</p>
+            <a href="${data.downloadUrl}" class="download-link" download target="_blank">
                 <i class="fas fa-download"></i>
                 Download Audio File
             </a>

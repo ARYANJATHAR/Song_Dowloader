@@ -3,15 +3,16 @@ const puppeteer = require('puppeteer');
 class JioSaavnSearcher {
   constructor() {
     this.baseUrl = 'https://www.jiosaavn.com';
+    this.isProduction = process.env.NODE_ENV === 'production';
   }
 
   async searchSong(songName, artist = '') {
     let browser;
     try {
-      console.log(`🎵 Starting human-like search for "${songName}" by "${artist || 'Unknown Artist'}"`);
+      if (!this.isProduction) console.log(`🎵 Starting search for "${songName}" by "${artist || 'Unknown Artist'}"`);
       
       const isHeadless = process.env.NODE_ENV === 'production' || process.env.HEADLESS === 'true';
-      console.log(`🔧 JioSaavn Search - Headless: ${isHeadless}`);
+      if (!this.isProduction) console.log(`🔧 JioSaavn Search - Headless: ${isHeadless}`);
       
       browser = await puppeteer.launch({
         headless: isHeadless,
@@ -32,7 +33,7 @@ class JioSaavnSearcher {
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
       
       // Step 1: Go to JioSaavn homepage
-      console.log('🏠 Going to JioSaavn homepage...');
+      if (!this.isProduction) console.log('🏠 Going to JioSaavn homepage...');
       await page.goto(this.baseUrl, { waitUntil: 'networkidle2' });
       
       // Wait for page to fully load
@@ -40,10 +41,10 @@ class JioSaavnSearcher {
 
       // Step 2: Navigate to search page and use search box
       const searchQuery = artist ? `${songName} ${artist}` : songName;
-      console.log(`🔍 Searching for: "${searchQuery}"`);
+      if (!this.isProduction) console.log(`🔍 Searching for: "${searchQuery}"`);
 
       // First, try to click on the Search navigation link
-      console.log('🔍 Looking for Search navigation link...');
+      if (!this.isProduction) console.log('🔍 Looking for Search navigation link...');
       const searchNavSelectors = [
         'a[href="/search"]',
         '.c-nav__link[href="/search"]',
@@ -57,9 +58,9 @@ class JioSaavnSearcher {
           await page.waitForSelector(selector, { timeout: 2000 }).catch(() => {});
           searchNavLink = await page.$(selector);
           if (searchNavLink) {
-            console.log(`✅ Found search navigation with selector: ${selector}`);
+            if (!this.isProduction) console.log(`✅ Found search navigation with selector: ${selector}`);
             await searchNavLink.click();
-            console.log('🔗 Clicked on Search navigation link');
+            if (!this.isProduction) console.log('🔗 Clicked on Search navigation link');
             break;
           }
         } catch (error) {
@@ -88,7 +89,7 @@ class JioSaavnSearcher {
       
       // Try waiting for the search box to appear with multiple attempts
       for (let attempt = 0; attempt < 3; attempt++) {
-        console.log(`🔍 Search input attempt ${attempt + 1}...`);
+        if (!this.isProduction) console.log(`🔍 Search input attempt ${attempt + 1}...`);
         
         for (const selector of searchBoxSelectors) {
           try {
@@ -99,7 +100,7 @@ class JioSaavnSearcher {
               // Verify the element is visible and interactable
               const isVisible = await searchBox.isIntersectingViewport();
               if (isVisible) {
-                console.log(`✅ Found search input box with selector: ${selector}`);
+                if (!this.isProduction) console.log(`✅ Found search input box with selector: ${selector}`);
                 break;
               }
             }
@@ -115,17 +116,19 @@ class JioSaavnSearcher {
       }
       
       if (!searchBox) {
-        console.log('❌ Could not find search box, trying alternative method...');
-        // Take a screenshot to help debug
-        await page.screenshot({ path: 'jiosaavn_homepage.png' });
-        console.log('📸 Screenshot saved as jiosaavn_homepage.png');
+        if (!this.isProduction) {
+          console.log('❌ Could not find search box, trying alternative method...');
+          // Take a screenshot to help debug
+          await page.screenshot({ path: 'jiosaavn_homepage.png' });
+          console.log('📸 Screenshot saved as jiosaavn_homepage.png');
+        }
         
         // Fallback to direct search URL
         const searchUrl = `${this.baseUrl}/search/${encodeURIComponent(searchQuery)}`;
-        console.log(`🔄 Using direct search URL: ${searchUrl}`);
+        if (!this.isProduction) console.log(`🔄 Using direct search URL: ${searchUrl}`);
         await page.goto(searchUrl, { waitUntil: 'networkidle2' });
       } else {
-        console.log('✅ Found search box, entering search query...');
+        if (!this.isProduction) console.log('✅ Found search box, entering search query...');
         
         // Clear any existing text and type the search query
         await searchBox.click();
@@ -161,16 +164,16 @@ class JioSaavnSearcher {
         }
         
         if (searchButton) {
-          console.log('🔍 Clicking search button...');
+          if (!this.isProduction) console.log('🔍 Clicking search button...');
           await searchButton.click();
         } else {
-          console.log('🔍 Pressing Enter to search...');
+          if (!this.isProduction) console.log('🔍 Pressing Enter to search...');
           await page.keyboard.press('Enter');
         }
       }
 
       // Step 3: Wait for search results to load
-      console.log('⏳ Waiting for search results...');
+      if (!this.isProduction) console.log('⏳ Waiting for search results...');
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Step 4: Find and analyze search results
@@ -294,18 +297,20 @@ class JioSaavnSearcher {
       // Sort by relevance score
       songLinks.sort((a, b) => b.score - a.score);
       
-      console.log(`🎯 Found ${songLinks.length} potential matches:`);
-      songLinks.slice(0, 5).forEach((song, index) => {
-        console.log(`${index + 1}. "${song.title}" by "${song.artist}" (Score: ${song.score})`);
-      });
+      if (!this.isProduction) {
+        console.log(`🎯 Found ${songLinks.length} potential matches:`);
+        songLinks.slice(0, 5).forEach((song, index) => {
+          console.log(`${index + 1}. "${song.title}" by "${song.artist}" (Score: ${song.score})`);
+        });
+      }
 
       const bestMatch = songLinks[0];
-      console.log(`🎵 Selected best match: "${bestMatch.title}" by "${bestMatch.artist}"`);
+      if (!this.isProduction) console.log(`🎵 Selected best match: "${bestMatch.title}" by "${bestMatch.artist}"`);
       
       return bestMatch.url;
 
     } catch (error) {
-      console.error('❌ Error in search process:', error.message);
+      if (!this.isProduction) console.error('❌ Error in search process:', error.message);
       throw error;
     } finally {
       if (browser) {
@@ -340,7 +345,7 @@ class JioSaavnSearcher {
 
       return firstSongUrl;
     } catch (error) {
-      console.error('Search error:', error);
+      if (!this.isProduction) console.error('Search error:', error);
       throw error;
     } finally {
       if (browser) {

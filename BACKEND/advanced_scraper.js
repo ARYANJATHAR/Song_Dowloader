@@ -7,6 +7,7 @@ const { getWebsiteConfig, AUDIO_PATTERNS } = require('./website_configs.js');
 class AudioScraper {
   constructor(options = {}) {
     const isHeadless = options.headless !== undefined ? options.headless : (process.env.NODE_ENV === 'production' || process.env.HEADLESS === 'true');
+    const isProduction = process.env.NODE_ENV === 'production';
     
     this.config = {
       headless: isHeadless,
@@ -14,24 +15,27 @@ class AudioScraper {
       downloadDir: options.downloadDir || './downloads',
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       waitForAudio: options.waitForAudio || 8000,
-      maxRetries: options.maxRetries || 3
+      maxRetries: options.maxRetries || 3,
+      isProduction: isProduction
     };
 
-    console.log(`🔧 AudioScraper Config:`);
-    console.log(`   options.headless: ${options.headless}`);
-    console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
-    console.log(`   HEADLESS env: ${process.env.HEADLESS}`);
-    console.log(`   Final headless: ${isHeadless}`);
+    if (!isProduction) {
+      console.log(`🔧 AudioScraper Config:`);
+      console.log(`   options.headless: ${options.headless}`);
+      console.log(`   NODE_ENV: ${process.env.NODE_ENV}`);
+      console.log(`   HEADLESS env: ${process.env.HEADLESS}`);
+      console.log(`   Final headless: ${isHeadless}`);
+    }
 
-    // Create downloads directory
-    if (!fs.existsSync(this.config.downloadDir)) {
+    // Create downloads directory only in development
+    if (!isProduction && !fs.existsSync(this.config.downloadDir)) {
       fs.mkdirSync(this.config.downloadDir, { recursive: true });
     }
   }
 
   async scrapeAudio(url) {
-    console.log(`🚀 Starting audio scraper for: ${url}`);
-    console.log(`🔧 Browser mode: ${this.config.headless ? 'HEADLESS' : 'VISIBLE'}`);
+    if (!this.config.isProduction) console.log(`🚀 Starting audio scraper for: ${url}`);
+    if (!this.config.isProduction) console.log(`🔧 Browser mode: ${this.config.headless ? 'HEADLESS' : 'VISIBLE'}`);
     this.currentUrl = url; // Store current URL for website config
     
     const browser = await puppeteer.launch({
@@ -80,6 +84,75 @@ class AudioScraper {
     }
   }
 
+  // New method to get audio URLs without downloading
+  async getAudioUrls(url) {
+    if (!this.config.isProduction) console.log(`🚀 Getting audio URLs for: ${url}`);
+    this.currentUrl = url;
+    
+    const browser = await puppeteer.launch({
+      headless: this.config.headless,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--memory-pressure-off',
+        '--max_old_space_size=4096'
+      ]
+    });
+
+    try {
+      const page = await browser.newPage();
+      
+      // Set user agent and viewport
+      await page.setUserAgent(this.config.userAgent);
+      await page.setViewport({ width: 1366, height: 768 });
+
+      // Set up request/response monitoring
+      const { audioUrls } = await this.setupNetworkMonitoring(page);
+      
+      // Store audioUrls reference for use in other methods
+      this.audioUrls = audioUrls;
+
+      // Navigate and interact with the page
+      await this.navigateAndInteract(page, url);
+
+      // Return filtered audio URLs
+      const audioUrlArray = Array.from(audioUrls);
+      const filteredUrls = audioUrlArray.filter(url => {
+        // Skip page URLs - we only want actual audio file URLs
+        if (url.includes('/song/') && !url.includes('.mp4') && !url.includes('saavncdn.com')) {
+          return false;
+        }
+        
+        // Only keep actual audio file URLs
+        if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
+          return true;
+        }
+        
+        // Check for other audio file extensions
+        if (url.match(/\.(mp3|wav|m4a|ogg|aac|flac|webm|mp4|opus)(\?.*)?$/i)) {
+          return true;
+        }
+        
+        return false;
+      });
+
+      return filteredUrls;
+
+    } finally {
+      await browser.close();
+    }
+  }
+
   async setupNetworkMonitoring(page) {
     await page.setRequestInterception(true);
     const audioUrls = new Set();
@@ -90,13 +163,13 @@ class AudioScraper {
       const url = request.url();
       const resourceType = request.resourceType();
       
-      // Debug: Log all media requests
-      if (resourceType === 'media' || url.includes('saavncdn.com')) {
+      // Debug: Log all media requests only in development
+      if (!this.config.isProduction && (resourceType === 'media' || url.includes('saavncdn.com'))) {
         console.log(`📡 Request [${resourceType}]:`, url);
       }
       
       if (this.isAudioUrl(url, resourceType, request.headers())) {
-        console.log('🎵 Request - Found audio URL:', url);
+        if (!this.config.isProduction) console.log('🎵 Request - Found audio URL:', url);
         audioUrls.add(url);
       }
       request.continue();
@@ -107,14 +180,14 @@ class AudioScraper {
       const url = response.url();
       const contentType = response.headers()['content-type'] || '';
       
-      // Debug: Log all media responses and saavncdn responses
-      if (url.includes('saavncdn.com') || contentType.includes('audio')) {
+      // Debug: Log responses only in development
+      if (!this.config.isProduction && (url.includes('saavncdn.com') || contentType.includes('audio'))) {
         console.log(`📡 Response [${response.status()}]:`, url);
         console.log(`    Content-Type:`, contentType);
       }
       
       if (this.isAudioResponse(url, contentType)) {
-        console.log('🎵 Response - Found audio URL:', url);
+        if (!this.config.isProduction) console.log('🎵 Response - Found audio URL:', url);
         audioUrls.add(url);
         responses.push({
           url: url,
@@ -137,13 +210,13 @@ class AudioScraper {
     
     // Check for JioSaavn specific patterns
     if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
-      console.log('🎵 JioSaavn audio detected:', url);
+      if (!this.config.isProduction) console.log('🎵 JioSaavn audio detected:', url);
       return true;
     }
     
     // Check for any mp4 with hash-like filenames (common for audio)
     if (url.match(/\/[a-f0-9]{32}_160\.mp4/i)) {
-      console.log('🎵 Hash-pattern audio detected:', url);
+      if (!this.config.isProduction) console.log('🎵 Hash-pattern audio detected:', url);
       return true;
     }
     
@@ -171,13 +244,13 @@ class AudioScraper {
     
     // Check for JioSaavn specific patterns
     if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
-      console.log('🎵 JioSaavn response audio detected:', url);
+      if (!this.config.isProduction) console.log('🎵 JioSaavn response audio detected:', url);
       return true;
     }
     
     // Check for any mp4 with hash-like filenames
     if (url.match(/\/[a-f0-9]{32}_160\.mp4/i)) {
-      console.log('🎵 Hash-pattern response audio detected:', url);
+      if (!this.config.isProduction) console.log('🎵 Hash-pattern response audio detected:', url);
       return true;
     }
     
@@ -188,7 +261,7 @@ class AudioScraper {
   }
 
   async navigateAndInteract(page, url) {
-    console.log('🌐 Navigating to website...');
+    if (!this.config.isProduction) console.log('🌐 Navigating to website...');
     await page.goto(url, { 
       waitUntil: 'networkidle0',
       timeout: this.config.timeout 
@@ -201,12 +274,12 @@ class AudioScraper {
     await this.triggerAudioLoading(page);
 
     // Wait for audio files to load
-    console.log('⏳ Waiting for audio files to load...');
+    if (!this.config.isProduction) console.log('⏳ Waiting for audio files to load...');
     await new Promise(resolve => setTimeout(resolve, this.config.waitForAudio));
   }
 
   async triggerAudioLoading(page) {
-    console.log('🔍 Looking for play buttons and audio triggers...');
+    if (!this.config.isProduction) console.log('🔍 Looking for play buttons and audio triggers...');
     
     // Get website-specific configuration
     const config = getWebsiteConfig(this.currentUrl);
@@ -225,7 +298,7 @@ class AudioScraper {
           try {
             const element = await page.$(selector);
             if (element) {
-              console.log(`🎬 Clicking play button: ${selector}`);
+              if (!this.config.isProduction) console.log(`🎬 Clicking play button: ${selector}`);
               await element.click();
               
               // Wait longer for JioSaavn and other sites that require play click
@@ -234,12 +307,12 @@ class AudioScraper {
               
               // Check if audio started loading after click
               if (this.audioUrls && this.audioUrls.size > 0) {
-                console.log('✅ Audio detected after play button click');
+                if (!this.config.isProduction) console.log('✅ Audio detected after play button click');
                 return true;
               }
             }
           } catch (error) {
-            console.log(`❌ Failed to click ${selector}:`, error.message);
+            if (!this.config.isProduction) console.log(`❌ Failed to click ${selector}:`, error.message);
           }
         }
         return false;
@@ -247,7 +320,7 @@ class AudioScraper {
 
       // Scroll to trigger lazy loading
       async () => {
-        console.log('📜 Scrolling to trigger content loading...');
+        if (!this.config.isProduction) console.log('📜 Scrolling to trigger content loading...');
         await page.evaluate(() => {
           window.scrollTo(0, document.body.scrollHeight);
         });
@@ -256,7 +329,7 @@ class AudioScraper {
 
       // Try to hover over audio elements
       async () => {
-        console.log('🖱️ Hovering over potential audio elements...');
+        if (!this.config.isProduction) console.log('🖱️ Hovering over potential audio elements...');
         const hoverSelectors = ['.song', '.track', '.audio', '.player'];
         
         for (const selector of hoverSelectors) {
@@ -278,7 +351,7 @@ class AudioScraper {
       try {
         await interaction();
       } catch (error) {
-        console.log('Interaction failed:', error.message);
+        if (!this.config.isProduction) console.log('Interaction failed:', error.message);
       }
     }
   }
@@ -290,19 +363,19 @@ class AudioScraper {
     const filteredUrls = audioUrlArray.filter(url => {
       // Skip JioSaavn page URLs - we only want actual audio file URLs
       if (url.includes('/song/') && !url.includes('.mp4') && !url.includes('saavncdn.com')) {
-        console.log(`⚠️ Skipping page URL: ${url}`);
+        if (!this.config.isProduction) console.log(`⚠️ Skipping page URL: ${url}`);
         return false;
       }
       
       // Only keep actual audio file URLs
       if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
-        console.log(`✅ Found valid audio URL: ${url}`);
+        if (!this.config.isProduction) console.log(`✅ Found valid audio URL: ${url}`);
         return true;
       }
       
       // Check for other audio file extensions
       if (url.match(/\.(mp3|wav|m4a|ogg|aac|flac|webm|mp4|opus)(\?.*)?$/i)) {
-        console.log(`✅ Found audio file: ${url}`);
+        if (!this.config.isProduction) console.log(`✅ Found audio file: ${url}`);
         return true;
       }
       
@@ -323,10 +396,12 @@ class AudioScraper {
       }
     }
     
-    console.log(`\n🎵 Found ${audioUrlArray.length} total URLs → ${filteredUrls.length} audio URLs → ${uniqueUrls.length} unique file(s)`);
+    if (!this.config.isProduction) {
+      console.log(`\n🎵 Found ${audioUrlArray.length} total URLs → ${filteredUrls.length} audio URLs → ${uniqueUrls.length} unique file(s)`);
+    }
     
     if (uniqueUrls.length === 0) {
-      console.log('❌ No valid audio files found.');
+      if (!this.config.isProduction) console.log('❌ No valid audio files found.');
       return [];
     }
 
@@ -334,7 +409,7 @@ class AudioScraper {
 
     for (let i = 0; i < uniqueUrls.length; i++) {
       const url = uniqueUrls[i];
-      console.log(`\n📥 Downloading ${i + 1}/${uniqueUrls.length}: ${url}`);
+      if (!this.config.isProduction) console.log(`\n📥 Downloading ${i + 1}/${uniqueUrls.length}: ${url}`);
       
       const result = await this.downloadSingleFile(url, i + 1, responses, refererUrl);
       if (result) {
@@ -356,7 +431,7 @@ class AudioScraper {
     
     for (let attempt = 1; attempt <= this.config.maxRetries; attempt++) {
       try {
-        console.log(`📡 Attempt ${attempt}/${this.config.maxRetries}`);
+        if (!this.config.isProduction) console.log(`📡 Attempt ${attempt}/${this.config.maxRetries}`);
         
         // Clean headers to avoid encoding issues
         const cleanHeaders = {
@@ -392,7 +467,7 @@ class AudioScraper {
         const fileSizeMB = (stats.size / 1024 / 1024).toFixed(2);
         
         if (stats.size > 1024) { // File should be at least 1KB
-          console.log(`✅ Downloaded: ${path.basename(fileName)} (${fileSizeMB} MB)`);
+          if (!this.config.isProduction) console.log(`✅ Downloaded: ${path.basename(fileName)} (${fileSizeMB} MB)`);
           return { fileName, url, size: stats.size };
         } else {
           fs.unlinkSync(fileName); // Delete tiny files
@@ -400,9 +475,9 @@ class AudioScraper {
         }
         
       } catch (error) {
-        console.error(`❌ Attempt ${attempt} failed:`, error.message);
+        if (!this.config.isProduction) console.error(`❌ Attempt ${attempt} failed:`, error.message);
         if (attempt === this.config.maxRetries) {
-          console.error(`💥 All ${this.config.maxRetries} attempts failed for: ${url}`);
+          if (!this.config.isProduction) console.error(`💥 All ${this.config.maxRetries} attempts failed for: ${url}`);
         } else {
           await new Promise(resolve => setTimeout(resolve, 2000)); // Wait before retry
         }
