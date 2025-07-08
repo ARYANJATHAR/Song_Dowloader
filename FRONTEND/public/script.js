@@ -9,10 +9,10 @@ const downloadBtn = document.getElementById('downloadBtn');
 let currentDownloadId = null;
 let downloadStartTime = null;
 
-// Show status panel by default
+// Show status panel by default when needed
 document.addEventListener('DOMContentLoaded', function() {
-    statusContainer.classList.add('show');
-    updateUIState('ready', 'Ready to download...', 0, 'fas fa-music');
+    // Hide status panel initially
+    statusContainer.classList.remove('show');
 });
 
 form.addEventListener('submit', async (e) => {
@@ -20,59 +20,20 @@ form.addEventListener('submit', async (e) => {
     
     const songName = document.getElementById('songName').value.trim();
     const artist = document.getElementById('artist').value.trim();
-    const songUrl = document.getElementById('songUrl').value.trim();
-
-    // Prioritize direct URL if provided
-    if (songUrl) {
-        if (!songUrl.includes('jiosaavn.com/song/')) {
-            showToast('Please enter a valid JioSaavn song URL', 'error');
-            return;
-        }
-        startDirectDownload(songUrl);
-        return;
-    }
 
     if (!songName) {
-        showToast('Please enter a song name or paste a JioSaavn URL', 'error');
+        showToast('Please enter a song name', 'error');
         return;
     }
 
     startDownload(songName, artist);
 });
 
-async function startDirectDownload(songUrl) {
-    try {
-        showStatusPanel();
-        updateUIState('downloading', 'Starting... 0%', 0, 'fas fa-download');
-
-        const response = await fetch('/api/direct-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songUrl })
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to start download');
-        }
-
-        currentDownloadId = data.downloadId;
-        downloadStartTime = Date.now();
-        
-        // Start checking status after a brief delay
-        setTimeout(checkDownloadStatus, 500);
-
-    } catch (error) {
-        showError('Failed to start download: ' + error.message);
-        resetUI();
-    }
-}
-
 async function startDownload(songName, artist) {
     try {
         showStatusPanel();
-        updateUIState('searching', 'Starting... 0%', 0, 'fas fa-search');
+        const searchQuery = artist ? `${songName} by ${artist}` : songName;
+        updateUIState('searching', `Starting search for "${searchQuery}"...`, 5, 'fas fa-rocket');
 
         const response = await fetch('/api/search-and-download', {
             method: 'POST',
@@ -88,6 +49,7 @@ async function startDownload(songName, artist) {
 
         currentDownloadId = data.downloadId;
         downloadStartTime = Date.now();
+        updateUIState('searching', 'Search request sent to server...', 10, 'fas fa-paper-plane');
         
         // Start checking status after a brief delay
         setTimeout(checkDownloadStatus, 500);
@@ -125,18 +87,67 @@ async function checkDownloadStatus() {
 }
 
 function updateStatus(data) {
-    const statusConfig = {
-        'searching': { icon: 'fas fa-search', text: 'Searching...', class: 'searching' },
-        'downloading': { icon: 'fas fa-download', text: 'Downloading...', class: 'downloading' },
-        'completed': { icon: 'fas fa-check', text: 'Completed!', class: 'completed' },
-        'failed': { icon: 'fas fa-times', text: 'Failed', class: 'failed' }
-    };
-
-    const config = statusConfig[data.status] || statusConfig['searching'];
-    const progress = data.progress || 0;
-    const statusText = `${config.text} ${progress}%`;
+    // Calculate elapsed time
+    const elapsedTime = downloadStartTime ? Math.floor((Date.now() - downloadStartTime) / 1000) : 0;
+    const timeStr = elapsedTime > 0 ? ` (${elapsedTime}s)` : '';
     
-    updateUIState(config.class, statusText, progress, config.icon);
+    // Generate dynamic status messages based on progress and status
+    let statusText = '';
+    let icon = '';
+    let className = '';
+    
+    switch(data.status) {
+        case 'searching':
+            if (data.progress < 15) {
+                statusText = `Initializing search...${timeStr}`;
+                icon = 'fas fa-cog fa-spin';
+            } else if (data.progress < 25) {
+                statusText = `Searching JioSaavn for "${data.songName || 'your song'}"...${timeStr}`;
+                icon = 'fas fa-search';
+            } else {
+                statusText = `Processing search results...${timeStr}`;
+                icon = 'fas fa-list-ul';
+            }
+            className = 'searching';
+            break;
+            
+        case 'downloading':
+            if (data.progress < 40) {
+                statusText = `Found song! Preparing download...${timeStr}`;
+                icon = 'fas fa-play';
+            } else if (data.progress < 60) {
+                statusText = `Extracting audio stream...${timeStr}`;
+                icon = 'fas fa-download fa-pulse';
+            } else if (data.progress < 80) {
+                statusText = `Downloading audio file...${timeStr}`;
+                icon = 'fas fa-download';
+            } else {
+                statusText = `Finalizing download...${timeStr}`;
+                icon = 'fas fa-check-circle';
+            }
+            className = 'downloading';
+            break;
+            
+        case 'completed':
+            const totalTime = downloadStartTime ? Math.floor((Date.now() - downloadStartTime) / 1000) : 0;
+            statusText = `Download completed in ${totalTime}s!`;
+            icon = 'fas fa-check';
+            className = 'completed';
+            break;
+            
+        case 'failed':
+            statusText = 'Download failed';
+            icon = 'fas fa-times';
+            className = 'failed';
+            break;
+            
+        default:
+            statusText = `Processing...${timeStr}`;
+            icon = 'fas fa-cog fa-spin';
+            className = 'searching';
+    }
+    
+    updateUIState(className, statusText, data.progress || 0, icon);
 }
 
 function updateUIState(status, text, progress, icon = 'fas fa-search') {
@@ -209,7 +220,7 @@ function showToast(message, type = 'info') {
         top: 20px;
         right: 20px;
         padding: 12px 20px;
-        background: ${type === 'error' ? '#ff512f' : '#667eea'};
+        background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#7c3aed'};
         color: white;
         border-radius: 12px;
         box-shadow: 0 8px 25px rgba(0,0,0,0.15);
@@ -232,7 +243,7 @@ function resetUI() {
     downloadBtn.disabled = false;
     downloadBtn.innerHTML = `
         <i class="fas fa-download"></i>
-        <span>Start Download</span>
+        Download
     `;
     currentDownloadId = null;
     downloadStartTime = null;
@@ -248,21 +259,30 @@ function setButtonLoading(loading) {
     } else {
         downloadBtn.innerHTML = `
             <i class="fas fa-download"></i>
-            <span>Start Download</span>
+            Download
         `;
     }
 }
 
 // Override original functions to include button states
-const originalStartDirectDownload = startDirectDownload;
 const originalStartDownload = startDownload;
-
-startDirectDownload = async function(songUrl) {
-    setButtonLoading(true);
-    return originalStartDirectDownload(songUrl);
-};
 
 startDownload = async function(songName, artist) {
     setButtonLoading(true);
     return originalStartDownload(songName, artist);
 };
+
+// Add slide animations for toast
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
