@@ -9,13 +9,21 @@ const WEBSITE_CONFIGS = {
       '.player-controls .play-btn',
       '.playButton',
       '[aria-label*="play" i]',
-      '.play-button'
+      '.play-button',
+      '.o-icon-play',
+      '[data-qa="play-button"]',
+      '.u-cPointer[data-testid="play-pause-button"]',
+      'button[title*="Play"]',
+      '.c-player__btn--play',
+      '.c-play-btn'
     ],
-    waitTime: 20000, // Increased wait time for audio to load
+    waitTime: 25000, // Increased wait time for audio to load
     scrollBehavior: 'smooth',
-    userInteractions: ['click_play', 'scroll', 'hover_track'],
+    userInteractions: ['click_play', 'scroll', 'hover_track', 'wait_for_player'],
     requiresPlayClick: true, // Flag to ensure play button is clicked
-    audioLoadDelay: 5000 // Additional delay after clicking play
+    audioLoadDelay: 8000, // Additional delay after clicking play
+    retryAttempts: 3, // Number of times to retry finding audio
+    additionalWaitAfterPlay: 10000 // Extra wait after play button click
   },
   
   'spotify.com': {
@@ -113,7 +121,8 @@ const AUDIO_PATTERNS = {
     'audio/m4a',
     'audio/flac',
     'audio/webm',
-    'audio/opus'
+    'audio/opus',
+    'video/mp4' // MP4 can contain audio
   ],
   urlPatterns: [
     '/audio/',
@@ -124,7 +133,8 @@ const AUDIO_PATTERNS = {
     '/track/',
     'cdn.audio',
     'streaming',
-    'playback'
+    'playback',
+    'saavncdn.com'
   ]
 };
 

@@ -129,14 +129,31 @@ class AudioScraper {
 
       // Return filtered audio URLs
       const audioUrlArray = Array.from(audioUrls);
+      if (!this.config.isProduction) {
+        console.log(`🔍 Total URLs captured: ${audioUrlArray.length}`);
+        audioUrlArray.forEach((url, index) => {
+          console.log(`   ${index + 1}. ${url}`);
+        });
+      }
+      
       const filteredUrls = audioUrlArray.filter(url => {
         // Skip page URLs - we only want actual audio file URLs
-        if (url.includes('/song/') && !url.includes('.mp4') && !url.includes('saavncdn.com')) {
+        if (url.includes('/song/') && !url.match(/\.(mp4|m4a|aac|mp3)(\?.*)?$/i)) {
           return false;
         }
         
-        // Only keep actual audio file URLs
-        if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
+        // Skip image URLs
+        if (url.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)(\?.*)?$/i)) {
+          return false;
+        }
+        
+        // Keep JioSaavn audio URLs (any quality: _96.mp4, _160.mp4, _320.mp4, etc.)
+        if (url.includes('saavncdn.com') && url.match(/_(\d+)\.(mp4|m4a|aac)(\?.*)?$/i)) {
+          return true;
+        }
+        
+        // Keep hash-pattern audio URLs
+        if (url.match(/\/[a-f0-9]{16,}_(\d+)\.(mp4|m4a|aac)(\?.*)?$/i)) {
           return true;
         }
         
@@ -147,6 +164,13 @@ class AudioScraper {
         
         return false;
       });
+
+      if (!this.config.isProduction) {
+        console.log(`✅ Filtered audio URLs: ${filteredUrls.length}`);
+        filteredUrls.forEach((url, index) => {
+          console.log(`   ${index + 1}. ${url}`);
+        });
+      }
 
       return filteredUrls;
 
@@ -210,14 +234,14 @@ class AudioScraper {
       return false;
     }
     
-    // Check for JioSaavn specific patterns
-    if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
+    // Check for JioSaavn specific patterns - support multiple quality levels
+    if (url.includes('saavncdn.com') && url.match(/_(\d+)\.(mp4|m4a|aac)(\?.*)?$/i)) {
       if (!this.config.isProduction) console.log('🎵 JioSaavn audio detected:', url);
       return true;
     }
     
-    // Check for any mp4 with hash-like filenames (common for audio)
-    if (url.match(/\/[a-f0-9]{32}_160\.mp4/i)) {
+    // Check for any mp4 with hash-like filenames (common for audio) - more flexible pattern
+    if (url.match(/\/[a-f0-9]{16,}_(\d+)\.(mp4|m4a|aac)(\?.*)?$/i)) {
       if (!this.config.isProduction) console.log('🎵 Hash-pattern audio detected:', url);
       return true;
     }
@@ -244,14 +268,14 @@ class AudioScraper {
       return false;
     }
     
-    // Check for JioSaavn specific patterns
-    if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
+    // Check for JioSaavn specific patterns - support multiple quality levels
+    if (url.includes('saavncdn.com') && url.match(/_(\d+)\.(mp4|m4a|aac)(\?.*)?$/i)) {
       if (!this.config.isProduction) console.log('🎵 JioSaavn response audio detected:', url);
       return true;
     }
     
-    // Check for any mp4 with hash-like filenames
-    if (url.match(/\/[a-f0-9]{32}_160\.mp4/i)) {
+    // Check for any mp4 with hash-like filenames - more flexible pattern
+    if (url.match(/\/[a-f0-9]{16,}_(\d+)\.(mp4|m4a|aac)(\?.*)?$/i)) {
       if (!this.config.isProduction) console.log('🎵 Hash-pattern response audio detected:', url);
       return true;
     }

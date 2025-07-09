@@ -9,7 +9,8 @@
     "dev": "cd BACKEND && cross-env HEADLESS=false nodemon server.js",
     "prod": "cd BACKEND && cross-env NODE_ENV=production HEADLESS=true node server.js",
     "web": "cd BACKEND && node server.js",
-    "postinstall": "cd BACKEND && node -e \"console.log('Install completed successfully')\""
+    "postinstall": "cd BACKEND && node -e \"console.log('Install completed successfully')\"",
+    "build": "npm install --omit=dev"
   },
   "keywords": [
     "audio",
