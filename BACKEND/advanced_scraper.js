@@ -12,7 +12,7 @@ class AudioScraper {
     this.config = {
       headless: isHeadless,
       timeout: options.timeout || 15000,
-      downloadDir: options.downloadDir || './downloads',
+      downloadDir: options.downloadDir || path.join(__dirname, '../downloads'),
       userAgent: options.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       waitForAudio: options.waitForAudio || 8000,
       maxRetries: options.maxRetries || 3,

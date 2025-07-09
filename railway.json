@@ -1,0 +1,13 @@
+{
+  "build": {
+    "command": "npm install"
+  },
+  "start": {
+    "command": "npm start"
+  },
+  "env": {
+    "NODE_ENV": "production",
+    "HEADLESS": "true",
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
+  }
+}

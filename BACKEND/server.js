@@ -14,8 +14,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('../FRONTEND/public')); // Serve static files
-app.use('/downloads', express.static('../downloads')); // Serve downloaded files
+app.use(express.static(path.join(__dirname, '../FRONTEND/public'))); // Serve static files
+app.use('/downloads', express.static(path.join(__dirname, '../downloads'))); // Serve downloaded files
 
 // Store active download processes
 const activeDownloads = new Map();
@@ -188,7 +188,7 @@ async function processDownload(downloadId, songName, artist) {
     const scraper = new AudioScraper({
       timeout: 20000,
       waitForAudio: 8000,
-      downloadDir: '../downloads'
+      downloadDir: path.join(__dirname, '../downloads')
     });
 
     // Get audio URL instead of downloading file
@@ -254,7 +254,7 @@ async function processDirectDownload(downloadId, songUrl) {
     const scraper = new AudioScraper({
       timeout: 20000,
       waitForAudio: 8000,
-      downloadDir: '../downloads'
+      downloadDir: path.join(__dirname, '../downloads')
     });
 
     // Get audio URL instead of downloading file
@@ -309,7 +309,7 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Audio Downloader Server running on http://localhost:${PORT}`);
   if (!isProduction) {
-    console.log(`📁 Downloads will be saved to: ${path.resolve('./downloads')}`);
+    console.log(`📁 Downloads will be saved to: ${path.resolve(__dirname, '../downloads')}`);
   }
 });
 
