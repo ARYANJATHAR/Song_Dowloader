@@ -3,8 +3,6 @@ const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 const { getWebsiteConfig, AUDIO_PATTERNS } = require('./website_configs.js');
-const EnhancedAudioExtractor = require('./enhanced_extractor.js');
-const DirectAudioExtractor = require('./direct_extractor.js');
 
 class AudioScraper {
   constructor(options = {}) {
@@ -172,44 +170,6 @@ class AudioScraper {
         filteredUrls.forEach((url, index) => {
           console.log(`   ${index + 1}. ${url}`);
         });
-      }
-
-      // If no audio URLs found, try multiple fallback strategies
-      if (filteredUrls.length === 0) {
-        if (!this.config.isProduction) console.log('🚀 No audio found with standard method, trying fallback strategies...');
-        
-        // Strategy 1: Try direct API extraction (fastest)
-        try {
-          if (!this.config.isProduction) console.log('🚀 Trying direct API extraction...');
-          const directExtractor = new DirectAudioExtractor();
-          const directResults = await directExtractor.extractAudioFromUrl(url);
-          
-          if (directResults && directResults.length > 0) {
-            if (!this.config.isProduction) console.log(`✅ Direct API extraction found ${directResults.length} audio URLs`);
-            return directResults;
-          }
-        } catch (directError) {
-          if (!this.config.isProduction) console.log('❌ Direct API extraction failed:', directError.message);
-        }
-        
-        // Strategy 2: Try enhanced browser extraction
-        try {
-          if (!this.config.isProduction) console.log('🚀 Trying enhanced browser extraction...');
-          const enhancedExtractor = new EnhancedAudioExtractor({
-            headless: this.config.headless,
-            timeout: this.config.timeout,
-            waitForAudio: this.config.waitForAudio
-          });
-          
-          const enhancedResults = await enhancedExtractor.extractAudioFromJioSaavn(url);
-          
-          if (enhancedResults && enhancedResults.length > 0) {
-            if (!this.config.isProduction) console.log(`✅ Enhanced extraction found ${enhancedResults.length} audio URLs`);
-            return enhancedResults;
-          }
-        } catch (enhancedError) {
-          if (!this.config.isProduction) console.log('❌ Enhanced extraction also failed:', enhancedError.message);
-        }
       }
 
       return filteredUrls;
