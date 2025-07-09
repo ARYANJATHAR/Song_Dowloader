@@ -40,6 +40,7 @@ class AudioScraper {
     
     const browser = await puppeteer.launch({
       headless: this.config.headless,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -91,6 +92,7 @@ class AudioScraper {
     
     const browser = await puppeteer.launch({
       headless: this.config.headless,
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
