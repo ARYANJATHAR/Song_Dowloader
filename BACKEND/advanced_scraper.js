@@ -89,6 +89,30 @@ class AudioScraper {
 
       // Download found audio files
       const downloadedFiles = await this.downloadAudioFiles(audioUrls, responses, page.url());
+      
+      if (downloadedFiles.length === 0) {
+        console.log('❌ No audio files were downloaded. Possible reasons:');
+        console.log('   - Song may not be available for download');
+        console.log('   - Page structure may have changed');
+        console.log('   - Network/connection issues');
+        console.log(`   - Total URLs found: ${audioUrls.size}`);
+        
+        // Return the best audio URL even if download failed
+        const audioUrlArray = Array.from(audioUrls);
+        if (audioUrlArray.length > 0) {
+          const bestAudioUrl = audioUrlArray.find(url => 
+            url.includes('saavncdn.com') && url.includes('_160.mp4')
+          ) || audioUrlArray[0];
+          
+          console.log(`🔗 Returning audio URL for client-side handling: ${bestAudioUrl}`);
+          return [{
+            url: bestAudioUrl,
+            fileName: null,
+            size: 0,
+            clientSide: true
+          }];
+        }
+      }
 
       return downloadedFiles;
 
@@ -310,21 +334,33 @@ class AudioScraper {
   }
 
   async navigateAndInteract(page, url) {
-    if (!this.config.isProduction) console.log('🌐 Navigating to website...');
+    console.log('🌐 Navigating to website...');
     await page.goto(url, { 
       waitUntil: 'networkidle0',
       timeout: this.config.timeout 
     });
 
     // Wait for initial load
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Increased wait time
 
     // Try to trigger audio loading
     await this.triggerAudioLoading(page);
 
-    // Wait for audio files to load
-    if (!this.config.isProduction) console.log('⏳ Waiting for audio files to load...');
-    await new Promise(resolve => setTimeout(resolve, this.config.waitForAudio));
+    // Wait longer for audio files to load in production
+    const waitTime = this.config.isProduction ? 15000 : this.config.waitForAudio;
+    console.log(`⏳ Waiting ${waitTime/1000}s for audio files to load...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    
+    // Check if we found any audio URLs
+    if (this.audioUrls && this.audioUrls.size > 0) {
+      console.log(`✅ Found ${this.audioUrls.size} audio URLs after navigation`);
+    } else {
+      console.log(`⚠️ No audio URLs found yet, trying additional triggers...`);
+      
+      // Try additional interaction methods
+      await this.additionalAudioTriggers(page);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
   }
 
   async triggerAudioLoading(page) {
@@ -402,6 +438,60 @@ class AudioScraper {
       } catch (error) {
         if (!this.config.isProduction) console.log('Interaction failed:', error.message);
       }
+    }
+  }
+
+  async additionalAudioTriggers(page) {
+    console.log('🔄 Trying additional audio triggers...');
+    
+    try {
+      // Try clicking any play buttons we might have missed
+      const additionalPlaySelectors = [
+        '.play',
+        '[data-play]',
+        '[aria-label*="Play" i]',
+        'button[title*="Play" i]',
+        '.c-btn',
+        '[role="button"]'
+      ];
+      
+      for (const selector of additionalPlaySelectors) {
+        try {
+          const elements = await page.$$(selector);
+          for (const element of elements) {
+            await element.click();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            if (this.audioUrls && this.audioUrls.size > 0) {
+              console.log(`✅ Audio triggered by ${selector}`);
+              return;
+            }
+          }
+        } catch (error) {
+          // Continue to next selector
+        }
+      }
+      
+      // Try scrolling and waiting
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+        window.scrollTo(0, 0);
+      });
+      
+      // Try refreshing the page and immediately clicking play
+      console.log('🔄 Refreshing page for fresh attempt...');
+      await page.reload({ waitUntil: 'networkidle0' });
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Immediately try to find and click play button
+      const playButton = await page.$('.c-btn.c-btn--primary[data-btn-icon="q"]');
+      if (playButton) {
+        console.log('🎬 Found play button on refresh, clicking...');
+        await playButton.click();
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+      
+    } catch (error) {
+      console.log(`❌ Additional triggers failed: ${error.message}`);
     }
   }
 

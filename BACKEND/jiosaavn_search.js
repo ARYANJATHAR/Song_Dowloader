@@ -53,140 +53,15 @@ class JioSaavnSearcher {
 
       // Step 2: Navigate to search page and use search box
       const searchQuery = artist ? `${songName} ${artist}` : songName;
-      if (!this.isProduction) console.log(`🔍 Searching for: "${searchQuery}"`);
+      console.log(`🔍 Searching for: "${searchQuery}"`);
 
-      // First, try to click on the Search navigation link
-      if (!this.isProduction) console.log('🔍 Looking for Search navigation link...');
-      const searchNavSelectors = [
-        'a[href="/search"]',
-        '.c-nav__link[href="/search"]',
-        'a[data-menu-icon="B"]',
-        '.c-nav__link.active[href="/search"]'
-      ];
+      // Try direct search URL first (more reliable in headless mode)
+      const searchUrl = `${this.baseUrl}/search/${encodeURIComponent(searchQuery)}`;
+      console.log(`🔄 Using direct search URL: ${searchUrl}`);
+      await page.goto(searchUrl, { waitUntil: 'networkidle2' });
       
-      let searchNavLink = null;
-      for (const selector of searchNavSelectors) {
-        try {
-          await page.waitForSelector(selector, { timeout: 2000 }).catch(() => {});
-          searchNavLink = await page.$(selector);
-          if (searchNavLink) {
-            if (!this.isProduction) console.log(`✅ Found search navigation with selector: ${selector}`);
-            await searchNavLink.click();
-            if (!this.isProduction) console.log('🔗 Clicked on Search navigation link');
-            break;
-          }
-        } catch (error) {
-          continue;
-        }
-      }
-      
-      // Wait for search page to load
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Now try to find the search input box
-      const searchBoxSelectors = [
-        '.rbt-input-main.form-control.rbt-input',  // JioSaavn specific search input
-        'input.rbt-input-main',
-        'input[aria-label="Search"]',
-        'input[role="combobox"]',
-        'input[type="search"]',
-        'input[placeholder*="search" i]',
-        'input[name*="search" i]',
-        '#search',
-        '.search-input',
-        'input[aria-label*="search" i]'
-      ];
-      
-      let searchBox = null;
-      
-      // Try waiting for the search box to appear with multiple attempts
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (!this.isProduction) console.log(`🔍 Search input attempt ${attempt + 1}...`);
-        
-        for (const selector of searchBoxSelectors) {
-          try {
-            // Wait for the element to appear
-            await page.waitForSelector(selector, { timeout: 2000 }).catch(() => {});
-            searchBox = await page.$(selector);
-            if (searchBox) {
-              // Verify the element is visible and interactable
-              const isVisible = await searchBox.isIntersectingViewport();
-              if (isVisible) {
-                if (!this.isProduction) console.log(`✅ Found search input box with selector: ${selector}`);
-                break;
-              }
-            }
-          } catch (error) {
-            continue;
-          }
-        }
-        
-        if (searchBox) break;
-        
-        // Wait a bit more before next attempt
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-      
-      if (!searchBox) {
-        if (!this.isProduction) {
-          console.log('❌ Could not find search box, trying alternative method...');
-          // Take a screenshot to help debug
-          await page.screenshot({ path: 'jiosaavn_homepage.png' });
-          console.log('📸 Screenshot saved as jiosaavn_homepage.png');
-        }
-        
-        // Fallback to direct search URL
-        const searchUrl = `${this.baseUrl}/search/${encodeURIComponent(searchQuery)}`;
-        if (!this.isProduction) console.log(`🔄 Using direct search URL: ${searchUrl}`);
-        await page.goto(searchUrl, { waitUntil: 'networkidle2' });
-      } else {
-        if (!this.isProduction) console.log('✅ Found search box, entering search query...');
-        
-        // Clear any existing text and type the search query
-        await searchBox.click();
-        await searchBox.focus();
-        await page.keyboard.down('Control');
-        await page.keyboard.press('KeyA');
-        await page.keyboard.up('Control');
-        await searchBox.type(searchQuery);
-        
-        // Wait a moment and then press Enter or click search button
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Try to find and click search button, or press Enter
-        const searchButtonSelectors = [
-          'button[type="submit"]',
-          '.search-btn',
-          '.search-button',
-          '[aria-label*="search" i]',
-          '.c-btn--search',
-          '[data-testid="search-button"]',
-          'button[class*="search"]',
-          '.search-icon'
-        ];
-        
-        let searchButton = null;
-        for (const selector of searchButtonSelectors) {
-          try {
-            searchButton = await page.$(selector);
-            if (searchButton) break;
-          } catch (error) {
-            continue;
-          }
-        }
-        
-        if (searchButton) {
-          if (!this.isProduction) console.log('🔍 Clicking search button...');
-          await searchButton.click();
-        } else {
-          if (!this.isProduction) console.log('🔍 Pressing Enter to search...');
-          await page.keyboard.press('Enter');
-        }
-      }
-
-      // Step 3: Wait for search results to load
-      if (!this.isProduction) console.log('⏳ Waiting for search results...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Wait longer for search results in production
+      await new Promise(resolve => setTimeout(resolve, 8000));
 
       // Step 4: Find and analyze search results
       const songLinks = await page.evaluate((targetSongName, targetArtist) => {
@@ -211,10 +86,12 @@ class JioSaavnSearcher {
           }
         }
         
+        console.log(`Found ${songElements.length} song elements on page`);
+        
         songElements.forEach((link, index) => {
           const container = link.closest('.o-flag, .c-list-item, .song-item, .search-result') || link.parentElement;
           
-          // Get song title
+          // Get song title - try multiple approaches
           let title = '';
           const titleSelectors = [
             '.song-name',
@@ -222,37 +99,49 @@ class JioSaavnSearcher {
             '.o-flag__body h4',
             '.track-title',
             'h3',
-            'h4'
+            'h4',
+            '.title',
+            '[data-title]'
           ];
           
           for (const selector of titleSelectors) {
             const titleElement = container.querySelector(selector) || link.querySelector(selector);
             if (titleElement) {
               title = titleElement.textContent.trim();
-              break;
+              if (title) break;
             }
           }
           
-          // If no title found in container, try getting from link text
+          // If no title found in container, try getting from link text or attributes
           if (!title) {
             title = link.textContent.trim();
           }
+          if (!title && link.getAttribute('title')) {
+            title = link.getAttribute('title').trim();
+          }
           
-          // Get artist
+          // Clean up title (remove extra info in parentheses if it makes title too long)
+          if (title.length > 100) {
+            title = title.replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+          }
+          
+          // Get artist - try multiple approaches
           let artist = '';
           const artistSelectors = [
             '.song-artists',
             '.c-media__subtitle',
             '.o-flag__body p',
             '.artist-name',
-            '.subtitle'
+            '.subtitle',
+            '.artist',
+            '[data-artist]'
           ];
           
           for (const selector of artistSelectors) {
             const artistElement = container.querySelector(selector);
             if (artistElement) {
               artist = artistElement.textContent.trim();
-              break;
+              if (artist) break;
             }
           }
           
@@ -262,16 +151,16 @@ class JioSaavnSearcher {
           // Calculate relevance score
           let score = 0;
           
-          const titleLower = title.toLowerCase();
-          const targetLower = targetSongName.toLowerCase();
+          const titleLower = title.toLowerCase().replace(/[^\w\s]/g, ''); // Remove special chars
+          const targetLower = targetSongName.toLowerCase().replace(/[^\w\s]/g, '');
           
           // Title matching (much higher scores for exact matches)
           if (titleLower === targetLower) {
-            score += 1000; // Exact title match gets highest priority
+            score += 2000; // Exact title match gets highest priority
           } else if (titleLower.includes(targetLower)) {
-            score += 500; // Contains target song name
+            score += 1000; // Contains target song name
           } else if (targetLower.includes(titleLower)) {
-            score += 300; // Target contains this song name
+            score += 800; // Target contains this song name
           } else {
             // Check for partial word matches
             const titleWords = titleLower.split(/\s+/);
@@ -279,23 +168,25 @@ class JioSaavnSearcher {
             let wordMatches = 0;
             
             for (const targetWord of targetWords) {
-              if (titleWords.some(titleWord => titleWord.includes(targetWord) || targetWord.includes(titleWord))) {
-                wordMatches++;
+              if (targetWord.length > 2) { // Only consider words longer than 2 chars
+                if (titleWords.some(titleWord => titleWord.includes(targetWord) || targetWord.includes(titleWord))) {
+                  wordMatches++;
+                }
               }
             }
             
-            score += wordMatches * 50; // Partial word matches
+            score += wordMatches * 100; // Partial word matches
           }
           
           // Artist matching (very important for disambiguation)
           if (targetArtist) {
-            const artistLower = artist.toLowerCase();
-            const targetArtistLower = targetArtist.toLowerCase();
+            const artistLower = artist.toLowerCase().replace(/[^\w\s]/g, '');
+            const targetArtistLower = targetArtist.toLowerCase().replace(/[^\w\s]/g, '');
             
             if (artistLower === targetArtistLower) {
-              score += 800; // Exact artist match
+              score += 1500; // Exact artist match
             } else if (artistLower.includes(targetArtistLower) || targetArtistLower.includes(artistLower)) {
-              score += 400; // Partial artist match
+              score += 750; // Partial artist match
             } else {
               // Check for artist word matches
               const artistWords = artistLower.split(/\s+/);
@@ -303,17 +194,19 @@ class JioSaavnSearcher {
               let artistWordMatches = 0;
               
               for (const targetWord of targetArtistWords) {
-                if (artistWords.some(artistWord => artistWord.includes(targetWord) || targetWord.includes(artistWord))) {
-                  artistWordMatches++;
+                if (targetWord.length > 2) { // Only consider words longer than 2 chars
+                  if (artistWords.some(artistWord => artistWord.includes(targetWord) || targetWord.includes(artistWord))) {
+                    artistWordMatches++;
+                  }
                 }
               }
               
-              score += artistWordMatches * 100; // Artist word matches
+              score += artistWordMatches * 200; // Artist word matches
             }
           }
           
           // Small position bonus (much reduced)
-          score += Math.max(0, 5 - index);
+          score += Math.max(0, 10 - index);
           
           if (title && href) {
             links.push({

@@ -223,20 +223,38 @@ async function processDownload(downloadId, songName, artist) {
 
     if (downloadedFiles && downloadedFiles.length > 0) {
       const downloadedFile = downloadedFiles[0];
-      console.log(`✅ Audio file downloaded: ${downloadedFile.fileName} (${(downloadedFile.size / 1024 / 1024).toFixed(2)} MB)`);
       
-      // Update status to completed with file info
-      activeDownloads.set(downloadId, {
-        ...activeDownloads.get(downloadId),
-        status: 'completed',
-        progress: 100,
-        fileName: downloadedFile.fileName,
-        fileSize: downloadedFile.size,
-        audioUrl: downloadedFile.url,
-        downloadUrl: `/api/download-file/${downloadId}`
-      });
+      // Check if it's a client-side URL (no actual file downloaded)
+      if (downloadedFile.clientSide) {
+        console.log(`🔗 Audio URL found for client-side download: ${downloadedFile.url}`);
+        
+        // Update status to completed with URL info
+        activeDownloads.set(downloadId, {
+          ...activeDownloads.get(downloadId),
+          status: 'completed',
+          progress: 100,
+          audioUrl: downloadedFile.url,
+          clientSide: true,
+          downloadUrl: downloadedFile.url
+        });
+        
+        console.log(`✅ Audio URL provided for: ${songName}`);
+      } else {
+        console.log(`✅ Audio file downloaded: ${downloadedFile.fileName} (${(downloadedFile.size / 1024 / 1024).toFixed(2)} MB)`);
+        
+        // Update status to completed with file info
+        activeDownloads.set(downloadId, {
+          ...activeDownloads.get(downloadId),
+          status: 'completed',
+          progress: 100,
+          fileName: downloadedFile.fileName,
+          fileSize: downloadedFile.size,
+          audioUrl: downloadedFile.url,
+          downloadUrl: `/api/download-file/${downloadId}`
+        });
 
-      console.log(`✅ Download completed for: ${songName}`);
+        console.log(`✅ Download completed for: ${songName}`);
+      }
     } else {
       throw new Error('No audio files found - the page may not contain downloadable audio');
     }
