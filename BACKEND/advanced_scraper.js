@@ -97,21 +97,16 @@ class AudioScraper {
         console.log('   - Network/connection issues');
         console.log(`   - Total URLs found: ${audioUrls.size}`);
         
-        // Return the best audio URL even if download failed
+        // Log the URLs we found for debugging
         const audioUrlArray = Array.from(audioUrls);
         if (audioUrlArray.length > 0) {
-          const bestAudioUrl = audioUrlArray.find(url => 
-            url.includes('saavncdn.com') && url.includes('_160.mp4')
-          ) || audioUrlArray[0];
-          
-          console.log(`🔗 Returning audio URL for client-side handling: ${bestAudioUrl}`);
-          return [{
-            url: bestAudioUrl,
-            fileName: null,
-            size: 0,
-            clientSide: true
-          }];
+          console.log('🔍 URLs found but no downloads succeeded:');
+          audioUrlArray.forEach((url, index) => {
+            console.log(`   ${index + 1}. ${url}`);
+          });
         }
+        
+        throw new Error('No audio files could be downloaded from the page');
       }
 
       return downloadedFiles;
@@ -364,7 +359,7 @@ class AudioScraper {
   }
 
   async triggerAudioLoading(page) {
-    if (!this.config.isProduction) console.log('🔍 Looking for play buttons and audio triggers...');
+    console.log('🔍 Looking for play buttons and audio triggers...');
     
     // Get website-specific configuration
     const config = getWebsiteConfig(this.currentUrl);
@@ -373,6 +368,7 @@ class AudioScraper {
       // Try clicking play buttons using website-specific selectors
       async () => {
         const playSelectors = config.playSelectors || [
+          '.c-btn.c-btn--primary[data-btn-icon="q"]', // JioSaavn specific
           '[data-testid="play-button"]', '.play-button', '.play-btn',
           '[aria-label*="play" i]', '[title*="play" i]',
           'button[class*="play"]', '.player-play', '#play-button',
@@ -381,23 +377,57 @@ class AudioScraper {
 
         for (const selector of playSelectors) {
           try {
-            const element = await page.$(selector);
-            if (element) {
-              if (!this.config.isProduction) console.log(`🎬 Clicking play button: ${selector}`);
-              await element.click();
+            const elements = await page.$$(selector);
+            console.log(`🎬 Found ${elements.length} elements for selector: ${selector}`);
+            
+            for (const element of elements) {
+              try {
+                const isVisible = await element.isIntersectingViewport();
+                if (isVisible) {
+                  console.log(`🎬 Clicking play button: ${selector}`);
+                  await element.click();
+                  
+                  // Wait longer for JioSaavn and other sites that require play click
+                  const waitTime = config.requiresPlayClick ? (config.audioLoadDelay || 8000) : 3000;
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                  
+                  // Check if audio started loading after click
+                  if (this.audioUrls && this.audioUrls.size > 0) {
+                    console.log('✅ Audio detected after play button click');
+                    return true;
+                  }
+                }
+              } catch (clickError) {
+                console.log(`❌ Failed to click element: ${clickError.message}`);
+              }
+            }
+          } catch (error) {
+            console.log(`❌ Failed to find ${selector}:`, error.message);
+          }
+        }
+        return false;
+      },
+
+      // Try clicking any button that might trigger audio
+      async () => {
+        console.log('🔍 Trying all clickable elements...');
+        const allButtons = await page.$$('button, [role="button"], .btn, [data-btn-icon]');
+        console.log(`🎬 Found ${allButtons.length} clickable elements`);
+        
+        for (const button of allButtons.slice(0, 10)) { // Limit to first 10
+          try {
+            const isVisible = await button.isIntersectingViewport();
+            if (isVisible) {
+              await button.click();
+              await new Promise(resolve => setTimeout(resolve, 2000));
               
-              // Wait longer for JioSaavn and other sites that require play click
-              const waitTime = config.requiresPlayClick ? (config.audioLoadDelay || 5000) : 2000;
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-              
-              // Check if audio started loading after click
               if (this.audioUrls && this.audioUrls.size > 0) {
-                if (!this.config.isProduction) console.log('✅ Audio detected after play button click');
+                console.log('✅ Audio detected after button click');
                 return true;
               }
             }
           } catch (error) {
-            if (!this.config.isProduction) console.log(`❌ Failed to click ${selector}:`, error.message);
+            // Continue to next button
           }
         }
         return false;
@@ -405,22 +435,24 @@ class AudioScraper {
 
       // Scroll to trigger lazy loading
       async () => {
-        if (!this.config.isProduction) console.log('📜 Scrolling to trigger content loading...');
+        console.log('📜 Scrolling to trigger content loading...');
         await page.evaluate(() => {
           window.scrollTo(0, document.body.scrollHeight);
+          window.scrollTo(0, document.body.scrollHeight / 2);
+          window.scrollTo(0, 0);
         });
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
       },
 
       // Try to hover over audio elements
       async () => {
-        if (!this.config.isProduction) console.log('🖱️ Hovering over potential audio elements...');
-        const hoverSelectors = ['.song', '.track', '.audio', '.player'];
+        console.log('🖱️ Hovering over potential audio elements...');
+        const hoverSelectors = ['.song', '.track', '.audio', '.player', '.c-media'];
         
         for (const selector of hoverSelectors) {
           try {
-            const element = await page.$(selector);
-            if (element) {
+            const elements = await page.$$(selector);
+            for (const element of elements.slice(0, 3)) { // Limit to first 3
               await element.hover();
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
@@ -434,9 +466,10 @@ class AudioScraper {
     // Execute all interactions
     for (const interaction of interactions) {
       try {
-        await interaction();
+        const result = await interaction();
+        if (result) break; // Stop if we found audio
       } catch (error) {
-        if (!this.config.isProduction) console.log('Interaction failed:', error.message);
+        console.log('Interaction failed:', error.message);
       }
     }
   }
@@ -502,22 +535,23 @@ class AudioScraper {
     const filteredUrls = audioUrlArray.filter(url => {
       // Skip JioSaavn page URLs - we only want actual audio file URLs
       if (url.includes('/song/') && !url.includes('.mp4') && !url.includes('saavncdn.com')) {
-        if (!this.config.isProduction) console.log(`⚠️ Skipping page URL: ${url}`);
+        console.log(`⚠️ Skipping page URL: ${url}`);
         return false;
       }
       
       // Only keep actual audio file URLs
-      if (url.includes('saavncdn.com') && url.includes('_160.mp4')) {
-        if (!this.config.isProduction) console.log(`✅ Found valid audio URL: ${url}`);
+      if (url.includes('saavncdn.com') && (url.includes('_160.mp4') || url.includes('_320.mp4') || url.includes('_96.mp4'))) {
+        console.log(`✅ Found valid audio URL: ${url}`);
         return true;
       }
       
       // Check for other audio file extensions
       if (url.match(/\.(mp3|wav|m4a|ogg|aac|flac|webm|mp4|opus)(\?.*)?$/i)) {
-        if (!this.config.isProduction) console.log(`✅ Found audio file: ${url}`);
+        console.log(`✅ Found audio file: ${url}`);
         return true;
       }
       
+      console.log(`⚠️ Skipping non-audio URL: ${url}`);
       return false;
     });
     
@@ -535,12 +569,10 @@ class AudioScraper {
       }
     }
     
-    if (!this.config.isProduction) {
-      console.log(`\n🎵 Found ${audioUrlArray.length} total URLs → ${filteredUrls.length} audio URLs → ${uniqueUrls.length} unique file(s)`);
-    }
+    console.log(`\n🎵 Found ${audioUrlArray.length} total URLs → ${filteredUrls.length} audio URLs → ${uniqueUrls.length} unique file(s)`);
     
     if (uniqueUrls.length === 0) {
-      if (!this.config.isProduction) console.log('❌ No valid audio files found.');
+      console.log('❌ No valid audio files found.');
       return [];
     }
 

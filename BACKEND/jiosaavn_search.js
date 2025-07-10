@@ -51,14 +51,76 @@ class JioSaavnSearcher {
       // Wait for page to fully load
       await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // Step 2: Navigate to search page and use search box
+      // Step 2: Try interactive search first (like local), then fallback to direct URL
       const searchQuery = artist ? `${songName} ${artist}` : songName;
       console.log(`🔍 Searching for: "${searchQuery}"`);
 
-      // Try direct search URL first (more reliable in headless mode)
-      const searchUrl = `${this.baseUrl}/search/${encodeURIComponent(searchQuery)}`;
-      console.log(`🔄 Using direct search URL: ${searchUrl}`);
-      await page.goto(searchUrl, { waitUntil: 'networkidle2' });
+      let searchSuccessful = false;
+
+      // Try interactive search first (more reliable for finding exact matches)
+      try {
+        console.log('🔍 Attempting interactive search...');
+        
+        // Navigate to search page
+        await page.goto(`${this.baseUrl}/search`, { waitUntil: 'networkidle2' });
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Try to find the search input box
+        const searchBoxSelectors = [
+          '.rbt-input-main.form-control.rbt-input',
+          'input.rbt-input-main',
+          'input[aria-label="Search"]',
+          'input[role="combobox"]',
+          'input[type="search"]',
+          'input[placeholder*="search" i]',
+          '#search',
+          '.search-input'
+        ];
+        
+        let searchBox = null;
+        for (const selector of searchBoxSelectors) {
+          try {
+            await page.waitForSelector(selector, { timeout: 3000 });
+            searchBox = await page.$(selector);
+            if (searchBox) {
+              const isVisible = await searchBox.isIntersectingViewport();
+              if (isVisible) {
+                console.log(`✅ Found search input: ${selector}`);
+                break;
+              }
+            }
+          } catch (error) {
+            continue;
+          }
+        }
+        
+        if (searchBox) {
+          // Clear and type search query
+          await searchBox.click();
+          await searchBox.focus();
+          await page.keyboard.down('Control');
+          await page.keyboard.press('KeyA');
+          await page.keyboard.up('Control');
+          await searchBox.type(searchQuery);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Press Enter to search
+          await page.keyboard.press('Enter');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          
+          searchSuccessful = true;
+          console.log('✅ Interactive search completed');
+        }
+      } catch (interactiveError) {
+        console.log(`❌ Interactive search failed: ${interactiveError.message}`);
+      }
+
+      // Fallback to direct URL search if interactive search failed
+      if (!searchSuccessful) {
+        console.log('🔄 Falling back to direct URL search...');
+        const searchUrl = `${this.baseUrl}/search/${encodeURIComponent(searchQuery)}`;
+        await page.goto(searchUrl, { waitUntil: 'networkidle2' });
+      }
       
       // Wait longer for search results in production
       await new Promise(resolve => setTimeout(resolve, 8000));
