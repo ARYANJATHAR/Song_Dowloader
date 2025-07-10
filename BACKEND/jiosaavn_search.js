@@ -294,29 +294,90 @@ class JioSaavnSearcher {
       
       // Always log search results in both dev and production for debugging
       console.log(`🎯 Found ${songLinks.length} potential matches for "${songName}" by "${artist || 'Unknown'}":`);
-      songLinks.slice(0, 5).forEach((song, index) => {
+      songLinks.slice(0, 10).forEach((song, index) => {
         console.log(`${index + 1}. "${song.title}" by "${song.artist}" (Score: ${song.score})`);
       });
 
+      if (songLinks.length === 0) {
+        throw new Error('No song results found on the search page');
+      }
+
       const bestMatch = songLinks[0];
-      console.log(`🎵 Selected best match: "${bestMatch.title}" by "${bestMatch.artist}" (Score: ${bestMatch.score})`);
+      console.log(`🎵 Initial best match: "${bestMatch.title}" by "${bestMatch.artist}" (Score: ${bestMatch.score})`);
+      console.log(`🔍 Search performed with query: "${searchQuery}"`);
+      console.log(`🌍 Environment: ${this.isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}`);
       
-      // Check if the best match score is too low (might indicate no good matches)
-      if (bestMatch.score < 500) {
-        console.log(`⚠️  Warning: Best match score is low (${bestMatch.score}). This might not be the correct song.`);
+      // Debug: Log page URL and title to understand what page we're on
+      const currentUrl = page.url();
+      const pageTitle = await page.title();
+      console.log(`📄 Current page: ${currentUrl}`);
+      console.log(`📋 Page title: ${pageTitle}`);
+      
+      // Check if we found a truly good match (exact or very close title match with artist)
+      const titleLower = bestMatch.title.toLowerCase().replace(/[^\w\s]/g, '');
+      const targetLower = songName.toLowerCase().replace(/[^\w\s]/g, '');
+      const artistLower = bestMatch.artist.toLowerCase().replace(/[^\w\s]/g, '');
+      const targetArtistLower = (artist || '').toLowerCase().replace(/[^\w\s]/g, '');
+      
+      const titleMatches = titleLower.includes(targetLower) || targetLower.includes(titleLower);
+      const artistMatches = !artist || artistLower.includes(targetArtistLower) || targetArtistLower.includes(artistLower);
+      
+      // If we don't have a good match, try multiple alternative search strategies
+      if (bestMatch.score < 1000 || !titleMatches || !artistMatches) {
+        console.log(`⚠️  Warning: Best match may not be correct. Title match: ${titleMatches}, Artist match: ${artistMatches}, Score: ${bestMatch.score}`);
+        console.log(`🔄 Trying multiple alternative search strategies...`);
         
-        // Try a more specific search if we have an artist
-        if (artist && bestMatch.score < 300) {
-          console.log(`🔄 Trying alternative search with exact phrase: "${songName} ${artist}"`);
+        const alternativeSearches = [
+          // Try exact phrase with quotes
+          `"${songName}" ${artist}`,
+          // Try artist first
+          `${artist} ${songName}`,
+          // Try without special characters
+          `${songName.replace(/[^\w\s]/g, '')} ${artist.replace(/[^\w\s]/g, '')}`,
+          // Try just the song name if artist search isn't working
+          songName
+        ];
+        
+        for (const [index, altQuery] of alternativeSearches.entries()) {
+          if (!altQuery.trim()) continue;
+          
           try {
-            // Try searching with quotes for exact phrase matching
-            const exactSearchQuery = `"${songName}" "${artist}"`;
-            const exactSearchUrl = `${this.baseUrl}/search/${encodeURIComponent(exactSearchQuery)}`;
-            await page.goto(exactSearchUrl, { waitUntil: 'networkidle2' });
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log(`🔄 Alternative search ${index + 1}/4: "${altQuery}"`);
             
-            // Get results from exact search
-            const exactSongLinks = await page.evaluate((targetSongName, targetArtist) => {
+            // Try both interactive search and direct URL
+            let searchSuccessful = false;
+            
+            // Try interactive search first
+            try {
+              await page.goto(`${this.baseUrl}/search`, { waitUntil: 'networkidle2' });
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              const searchBox = await page.$('.rbt-input-main.form-control.rbt-input');
+              if (searchBox) {
+                await searchBox.click();
+                await searchBox.focus();
+                await page.keyboard.down('Control');
+                await page.keyboard.press('KeyA');
+                await page.keyboard.up('Control');
+                await searchBox.type(altQuery);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await page.keyboard.press('Enter');
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                searchSuccessful = true;
+              }
+            } catch (e) {
+              console.log(`❌ Interactive search failed for "${altQuery}"`);
+            }
+            
+            // Fallback to direct URL
+            if (!searchSuccessful) {
+              const altSearchUrl = `${this.baseUrl}/search/${encodeURIComponent(altQuery)}`;
+              await page.goto(altSearchUrl, { waitUntil: 'networkidle2' });
+              await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            
+            // Get results from alternative search
+            const altSongLinks = await page.evaluate((targetSongName, targetArtist) => {
               const links = [];
               const selectors = [
                 'a[href*="/song/"]',
@@ -328,7 +389,7 @@ class JioSaavnSearcher {
               for (const selector of selectors) {
                 const elements = Array.from(document.querySelectorAll(selector));
                 if (elements.length > 0) {
-                  songElements = elements.slice(0, 5); // Only check first 5
+                  songElements = elements.slice(0, 10); // Check more results
                   break;
                 }
               }
@@ -358,29 +419,83 @@ class JioSaavnSearcher {
                 }
                 
                 const href = link.href;
-                if (title && href) {
-                  links.push({ title, artist, url: href, score: 1000 + (5 - index) });
+                
+                // Score this result
+                let score = 0;
+                const titleLower = title.toLowerCase().replace(/[^\w\s]/g, '');
+                const targetLower = targetSongName.toLowerCase().replace(/[^\w\s]/g, '');
+                
+                if (titleLower === targetLower) {
+                  score += 2000;
+                } else if (titleLower.includes(targetLower)) {
+                  score += 1000;
+                } else if (targetLower.includes(titleLower)) {
+                  score += 800;
+                }
+                
+                if (targetArtist) {
+                  const artistLower = artist.toLowerCase().replace(/[^\w\s]/g, '');
+                  const targetArtistLower = targetArtist.toLowerCase().replace(/[^\w\s]/g, '');
+                  
+                  if (artistLower.includes(targetArtistLower) || targetArtistLower.includes(artistLower)) {
+                    score += 1500;
+                  }
+                }
+                
+                if (title && href && score > 500) {
+                  links.push({ title, artist, url: href, score: score + (10 - index) });
                 }
               });
               
-              return links;
+              return links.sort((a, b) => b.score - a.score);
             }, songName, artist);
             
-            if (exactSongLinks.length > 0) {
-              console.log(`🎯 Exact search found ${exactSongLinks.length} results:`);
-              exactSongLinks.forEach((song, index) => {
-                console.log(`${index + 1}. "${song.title}" by "${song.artist}"`);
+            if (altSongLinks.length > 0) {
+              console.log(`🎯 Alternative search found ${altSongLinks.length} results:`);
+              altSongLinks.slice(0, 3).forEach((song, index) => {
+                console.log(`${index + 1}. "${song.title}" by "${song.artist}" (Score: ${song.score})`);
               });
               
-              // Use the first result from exact search
-              console.log(`🎵 Using exact search result: "${exactSongLinks[0].title}" by "${exactSongLinks[0].artist}"`);
-              return exactSongLinks[0].url;
+              const bestAltMatch = altSongLinks[0];
+              
+              // Check if this alternative result is better
+              const altTitleLower = bestAltMatch.title.toLowerCase().replace(/[^\w\s]/g, '');
+              const altArtistLower = bestAltMatch.artist.toLowerCase().replace(/[^\w\s]/g, '');
+              const altTitleMatches = altTitleLower.includes(targetLower) || targetLower.includes(altTitleLower);
+              const altArtistMatches = !artist || altArtistLower.includes(targetArtistLower) || targetArtistLower.includes(altArtistLower);
+              
+              if ((altTitleMatches && altArtistMatches) || bestAltMatch.score > bestMatch.score) {
+                console.log(`🎵 Using better alternative result: "${bestAltMatch.title}" by "${bestAltMatch.artist}" (Score: ${bestAltMatch.score})`);
+                return bestAltMatch.url;
+              }
             }
-          } catch (exactSearchError) {
-            console.log(`❌ Exact search failed: ${exactSearchError.message}`);
+            
+          } catch (altSearchError) {
+            console.log(`❌ Alternative search ${index + 1} failed: ${altSearchError.message}`);
+            continue;
           }
         }
       }
+      
+      // Final validation - ensure we have a reasonable match
+      const finalTitleLower = bestMatch.title.toLowerCase().replace(/[^\w\s]/g, '');
+      const finalTargetLower = songName.toLowerCase().replace(/[^\w\s]/g, '');
+      const finalArtistLower = bestMatch.artist.toLowerCase().replace(/[^\w\s]/g, '');
+      const finalTargetArtistLower = (artist || '').toLowerCase().replace(/[^\w\s]/g, '');
+      
+      const finalTitleMatches = finalTitleLower.includes(finalTargetLower) || finalTargetLower.includes(finalTitleLower);
+      const finalArtistMatches = !artist || finalArtistLower.includes(finalTargetArtistLower) || finalTargetArtistLower.includes(finalArtistLower);
+      
+      // If we still don't have a good match, reject it
+      if (!finalTitleMatches && bestMatch.score < 1000) {
+        console.log(`❌ Final validation failed - no good match found for "${songName}" by "${artist}"`);
+        console.log(`   Best result was: "${bestMatch.title}" by "${bestMatch.artist}" (Score: ${bestMatch.score})`);
+        console.log(`   Title matches: ${finalTitleMatches}, Artist matches: ${finalArtistMatches}`);
+        throw new Error(`No relevant songs found for "${songName}" by "${artist || 'Unknown'}". The search returned unrelated results.`);
+      }
+      
+      console.log(`🎵 Final selected match: "${bestMatch.title}" by "${bestMatch.artist}" (Score: ${bestMatch.score})`);
+      console.log(`   ✅ Title matches: ${finalTitleMatches}, Artist matches: ${finalArtistMatches}`);
       
       return bestMatch.url;
 

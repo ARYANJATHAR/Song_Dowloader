@@ -396,6 +396,15 @@ class AudioScraper {
                     console.log('✅ Audio detected after play button click');
                     return true;
                   }
+                  
+                  // In production, wait a bit more and check again
+                  if (this.config.isProduction) {
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    if (this.audioUrls && this.audioUrls.size > 0) {
+                      console.log('✅ Audio detected after additional wait in production');
+                      return true;
+                    }
+                  }
                 }
               } catch (clickError) {
                 console.log(`❌ Failed to click element: ${clickError.message}`);
