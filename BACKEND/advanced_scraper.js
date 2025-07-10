@@ -27,15 +27,16 @@ class AudioScraper {
       console.log(`   Final headless: ${isHeadless}`);
     }
 
-    // Create downloads directory only in development
-    if (!isProduction && !fs.existsSync(this.config.downloadDir)) {
+    // Create downloads directory in both development and production
+    if (!fs.existsSync(this.config.downloadDir)) {
       fs.mkdirSync(this.config.downloadDir, { recursive: true });
+      console.log(`📁 Created downloads directory: ${this.config.downloadDir}`);
     }
   }
 
   async scrapeAudio(url) {
-    if (!this.config.isProduction) console.log(`🚀 Starting audio scraper for: ${url}`);
-    if (!this.config.isProduction) console.log(`🔧 Browser mode: ${this.config.headless ? 'HEADLESS' : 'VISIBLE'}`);
+    console.log(`🚀 Starting audio scraper for: ${url} [${this.config.isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+    console.log(`🔧 Browser mode: ${this.config.headless ? 'HEADLESS' : 'VISIBLE'}`);
     this.currentUrl = url; // Store current URL for website config
     
     const browser = await puppeteer.launch({
@@ -55,7 +56,18 @@ class AudioScraper {
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
         '--memory-pressure-off',
-        '--max_old_space_size=4096'
+        '--max_old_space_size=4096',
+        // Railway-specific optimizations
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--disable-translate',
+        '--hide-scrollbars',
+        '--disable-bundled-ppapi-flash',
+        '--mute-audio',
+        '--no-default-browser-check',
+        '--disable-prompt-on-repost'
       ]
     });
 
@@ -85,9 +97,9 @@ class AudioScraper {
     }
   }
 
-  // New method to get audio URLs without downloading
+  // Method to get audio URLs without downloading (keeping for backward compatibility)
   async getAudioUrls(url) {
-    if (!this.config.isProduction) console.log(`🚀 Getting audio URLs for: ${url}`);
+    console.log(`🚀 Getting audio URLs for: ${url} [${this.config.isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
     this.currentUrl = url;
     
     const browser = await puppeteer.launch({
@@ -107,7 +119,18 @@ class AudioScraper {
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
         '--memory-pressure-off',
-        '--max_old_space_size=4096'
+        '--max_old_space_size=4096',
+        // Railway-specific optimizations
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--disable-translate',
+        '--hide-scrollbars',
+        '--disable-bundled-ppapi-flash',
+        '--mute-audio',
+        '--no-default-browser-check',
+        '--disable-prompt-on-repost'
       ]
     });
 
@@ -129,8 +152,8 @@ class AudioScraper {
 
       // Return filtered audio URLs
       const audioUrlArray = Array.from(audioUrls);
-      if (!this.config.isProduction) {
-        console.log(`🔍 Total URLs captured: ${audioUrlArray.length}`);
+      console.log(`🔍 Total URLs captured: ${audioUrlArray.length}`);
+      if (audioUrlArray.length > 0) {
         audioUrlArray.forEach((url, index) => {
           console.log(`   ${index + 1}. ${url}`);
         });
@@ -165,8 +188,8 @@ class AudioScraper {
         return false;
       });
 
-      if (!this.config.isProduction) {
-        console.log(`✅ Filtered audio URLs: ${filteredUrls.length}`);
+      console.log(`✅ Filtered audio URLs: ${filteredUrls.length}`);
+      if (filteredUrls.length > 0) {
         filteredUrls.forEach((url, index) => {
           console.log(`   ${index + 1}. ${url}`);
         });

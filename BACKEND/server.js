@@ -20,6 +20,20 @@ app.use('/downloads', express.static(path.join(__dirname, '../downloads'))); // 
 // Store active download processes
 const activeDownloads = new Map();
 
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: isProduction ? 'production' : 'development'
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../FRONTEND/public/index.html'));
+});
+
 // API Routes
 app.post('/api/search-and-download', async (req, res) => {
   try {
@@ -107,14 +121,24 @@ app.get('/api/download-file/:downloadId', (req, res) => {
     return res.status(404).json({ error: 'File not ready or not found' });
   }
   
-  if (!download.audioUrl) {
-    return res.status(404).json({ error: 'Audio URL not available' });
+  // If we have a local file, serve it
+  if (download.fileName && fs.existsSync(download.fileName)) {
+    console.log(`📥 Serving local file: ${download.fileName}`);
+    const fileName = path.basename(download.fileName);
+    res.setHeader('Content-Disposition', `attachment; filename="${download.songName || 'audio'}.mp4"`);
+    res.setHeader('Content-Type', 'audio/mp4');
+    return res.sendFile(path.resolve(download.fileName));
   }
   
-  // Stream directly from source instead of storing locally
-  res.setHeader('Content-Disposition', `attachment; filename="${download.songName || 'audio'}.mp4"`);
-  res.setHeader('Content-Type', 'audio/mp4');
-  res.redirect(download.audioUrl);
+  // Fallback to redirect if no local file
+  if (download.audioUrl) {
+    console.log(`🔗 Redirecting to source: ${download.audioUrl}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${download.songName || 'audio'}.mp4"`);
+    res.setHeader('Content-Type', 'audio/mp4');
+    return res.redirect(download.audioUrl);
+  }
+  
+  return res.status(404).json({ error: 'Audio file not available' });
 });
 
 // Search JioSaavn for song URL using improved search
@@ -122,7 +146,7 @@ async function searchJioSaavn(songName, artist = '') {
   const searcher = new JioSaavnSearcher();
   
   try {
-    if (!isProduction) console.log(`🔍 Searching for: "${songName}" by "${artist || 'Unknown Artist'}"`);
+    console.log(`🔍 Searching for: "${songName}" by "${artist || 'Unknown Artist'}"`);
     const songUrl = await searcher.searchSong(songName, artist);
     
     // Validate the returned URL
@@ -130,23 +154,23 @@ async function searchJioSaavn(songName, artist = '') {
       throw new Error(`No valid song URL found for "${songName}"`);
     }
     
-    if (!isProduction) console.log(`✅ Found song URL: ${songUrl}`);
+    console.log(`✅ Found song URL: ${songUrl}`);
     return songUrl;
   } catch (error) {
-    if (!isProduction) console.error('Primary search failed, trying fallback:', error.message);
+    console.error('Primary search failed, trying fallback:', error.message);
     
     try {
-      if (!isProduction) console.log(`🔄 Trying fallback search for: "${songName}"`);
+      console.log(`🔄 Trying fallback search for: "${songName}"`);
       const fallbackUrl = await searcher.quickSearch(songName);
       
       if (fallbackUrl && fallbackUrl.includes('/song/')) {
-        if (!isProduction) console.log(`✅ Fallback search successful: ${fallbackUrl}`);
+        console.log(`✅ Fallback search successful: ${fallbackUrl}`);
         return fallbackUrl;
       } else {
         throw new Error(`No valid results from fallback search`);
       }
     } catch (fallbackError) {
-      if (!isProduction) console.error('Fallback search also failed:', fallbackError.message);
+      console.error('Fallback search also failed:', fallbackError.message);
       throw new Error(`Search failed for "${songName}". Both primary and fallback methods failed.`);
     }
   }
@@ -165,9 +189,11 @@ async function processDownload(downloadId, songName, artist) {
     // Search for song URL
     let songUrl;
     try {
+      console.log(`🔍 Searching for song: "${songName}" by "${artist || 'Unknown Artist'}"`);
       songUrl = await searchJioSaavn(songName, artist);
+      console.log(`✅ Found song URL: ${songUrl}`);
     } catch (error) {
-      if (!isProduction) console.error('Search failed:', error.message);
+      console.error('Search failed:', error.message);
       throw new Error(`Search failed: ${error.message}`);
     }
     
@@ -184,36 +210,39 @@ async function processDownload(downloadId, songName, artist) {
       url: songUrl
     });
 
-    // Initialize scraper to get audio URL
+    // Initialize scraper for file download
     const scraper = new AudioScraper({
       timeout: 20000,
       waitForAudio: 8000,
       downloadDir: path.join(__dirname, '../downloads')
     });
 
-    // Get audio URL instead of downloading file
-    if (!isProduction) console.log(`🚀 Starting URL extraction for: ${songName}`);
-    const audioUrls = await scraper.getAudioUrls(songUrl);
+    // Download audio file to server (works in both dev and production)
+    console.log(`🚀 Starting audio download for: ${songName} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+    const downloadedFiles = await scraper.scrapeAudio(songUrl);
 
-    if (audioUrls && audioUrls.length > 0) {
-      const audioUrl = audioUrls[0];
+    if (downloadedFiles && downloadedFiles.length > 0) {
+      const downloadedFile = downloadedFiles[0];
+      console.log(`✅ Audio file downloaded: ${downloadedFile.fileName} (${(downloadedFile.size / 1024 / 1024).toFixed(2)} MB)`);
       
-      // Update status to completed with audio URL
+      // Update status to completed with file info
       activeDownloads.set(downloadId, {
         ...activeDownloads.get(downloadId),
         status: 'completed',
         progress: 100,
-        audioUrl: audioUrl,
+        fileName: downloadedFile.fileName,
+        fileSize: downloadedFile.size,
+        audioUrl: downloadedFile.url,
         downloadUrl: `/api/download-file/${downloadId}`
       });
 
-      if (!isProduction) console.log(`✅ Audio URL extracted for: ${songName}`);
+      console.log(`✅ Download completed for: ${songName}`);
     } else {
       throw new Error('No audio files found - the page may not contain downloadable audio');
     }
 
   } catch (error) {
-    if (!isProduction) console.error(`❌ Download failed for ${songName}:`, error.message);
+    console.error(`❌ Download failed for ${songName}:`, error.message);
     
     // Provide more helpful error messages
     let userFriendlyError = error.message;
@@ -250,36 +279,39 @@ async function processDirectDownload(downloadId, songUrl) {
       url: songUrl
     });
 
-    // Initialize scraper
+    // Initialize scraper for direct download
     const scraper = new AudioScraper({
       timeout: 20000,
       waitForAudio: 8000,
       downloadDir: path.join(__dirname, '../downloads')
     });
 
-    // Get audio URL instead of downloading file
-    if (!isProduction) console.log(`🚀 Starting URL extraction for: ${songUrl}`);
-    const audioUrls = await scraper.getAudioUrls(songUrl);
+    // Download audio file directly from URL
+    console.log(`🚀 Starting direct download for: ${songUrl} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+    const downloadedFiles = await scraper.scrapeAudio(songUrl);
 
-    if (audioUrls && audioUrls.length > 0) {
-      const audioUrl = audioUrls[0];
+    if (downloadedFiles && downloadedFiles.length > 0) {
+      const downloadedFile = downloadedFiles[0];
+      console.log(`✅ Direct download completed: ${downloadedFile.fileName} (${(downloadedFile.size / 1024 / 1024).toFixed(2)} MB)`);
       
       // Update status to completed
       activeDownloads.set(downloadId, {
         ...activeDownloads.get(downloadId),
         status: 'completed',
         progress: 100,
-        audioUrl: audioUrl,
+        fileName: downloadedFile.fileName,
+        fileSize: downloadedFile.size,
+        audioUrl: downloadedFile.url,
         downloadUrl: `/api/download-file/${downloadId}`
       });
 
-      if (!isProduction) console.log(`✅ Direct URL extraction completed for: ${songUrl}`);
+      console.log(`✅ Direct download process completed for: ${songUrl}`);
     } else {
       throw new Error('No audio files found - the page may not contain downloadable audio');
     }
 
   } catch (error) {
-    if (!isProduction) console.error(`❌ Direct download failed for ${songUrl}:`, error.message);
+    console.error(`❌ Direct download failed for ${songUrl}:`, error.message);
     
     activeDownloads.set(downloadId, {
       ...activeDownloads.get(downloadId),
@@ -308,9 +340,9 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Audio Downloader Server running on http://localhost:${PORT}`);
-  if (!isProduction) {
-    console.log(`📁 Downloads will be saved to: ${path.resolve(__dirname, '../downloads')}`);
-  }
+  console.log(`📁 Downloads will be saved to: ${path.resolve(__dirname, '../downloads')}`);
+  console.log(`🔧 Running in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
+  console.log(`📡 Static files served from: ${path.resolve(__dirname, '../FRONTEND/public')}`);
 });
 
 module.exports = app;
