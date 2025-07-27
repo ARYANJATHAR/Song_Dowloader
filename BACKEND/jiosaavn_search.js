@@ -16,7 +16,7 @@ class JioSaavnSearcher {
       
       browser = await puppeteer.launch({
         headless: isHeadless,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/google-chrome-stable' || '/usr/bin/chromium-browser',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -25,6 +25,8 @@ class JioSaavnSearcher {
           '--no-first-run',
           '--no-zygote',
           '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
           // Railway-specific optimizations
           '--disable-extensions',
           '--disable-plugins',
