@@ -27,8 +27,7 @@ GetMusic is a professional music download service that provides users with insta
 
 ## 🌐 Access GetMusic
 
-GetMusic is a hosted web service available at: **[https://getmusic.app](https://getmusic.app)**
-
+GetMusic is a hosted web service available at: **[https://get-music.app](https://get-music.app)**
 Simply visit our website to start downloading your favorite music instantly - no installation or setup required!
 
 ## 📖 How to Use
