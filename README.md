@@ -13,7 +13,7 @@ This project demonstrates how a bug in a popular music website allows audio file
 - Modern, mobile-friendly UI
 - Real-time download progress
 - Automatic cleanup of old downloads
-
+npm
 ## ⚡ Quick Setup
 1. **Install Node.js** (v14+)
 2. **Install dependencies:**

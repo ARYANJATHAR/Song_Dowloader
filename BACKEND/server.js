@@ -321,7 +321,7 @@ async function processDirectDownload(downloadId, songUrl) {
   }
 }
 
-// Cleanup old downloads (run every hour) - only cleanup memory in production
+// Cleanup old downloads from memory (run every hour)
 setInterval(() => {
   const now = Date.now();
   const oneHour = 60 * 60 * 1000;
@@ -332,6 +332,69 @@ setInterval(() => {
     }
   }
 }, 60 * 60 * 1000);
+
+// Cleanup old downloaded files from disk (run every 6 hours)
+setInterval(() => {
+  cleanupOldFiles();
+}, 6 * 60 * 60 * 1000); // Run every 6 hours
+
+// Function to cleanup files older than 24 hours
+async function cleanupOldFiles() {
+  try {
+    const downloadsDir = path.join(__dirname, '../downloads');
+    
+    // Check if downloads directory exists
+    if (!fs.existsSync(downloadsDir)) {
+      console.log('📁 Downloads directory does not exist, skipping cleanup');
+      return;
+    }
+    
+    const files = fs.readdirSync(downloadsDir);
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    let deletedCount = 0;
+    let totalSize = 0;
+    
+    console.log(`🧹 Starting file cleanup - checking ${files.length} files...`);
+    
+    for (const file of files) {
+      const filePath = path.join(downloadsDir, file);
+      
+      try {
+        const stats = fs.statSync(filePath);
+        const fileAge = now - stats.mtime.getTime(); // Time since last modified
+        
+        if (fileAge > twentyFourHours) {
+          const fileSizeMB = (stats.size / 1024 / 1024).toFixed(2);
+          totalSize += stats.size;
+          
+          fs.unlinkSync(filePath);
+          deletedCount++;
+          
+          console.log(`🗑️ Deleted old file: ${file} (${fileSizeMB} MB, ${Math.round(fileAge / (60 * 60 * 1000))} hours old)`);
+        }
+      } catch (error) {
+        console.error(`❌ Error processing file ${file}:`, error.message);
+      }
+    }
+    
+    if (deletedCount > 0) {
+      const totalSizeMB = (totalSize / 1024 / 1024).toFixed(2);
+      console.log(`✅ Cleanup completed: Deleted ${deletedCount} old files, freed up ${totalSizeMB} MB of space`);
+    } else {
+      console.log('✅ Cleanup completed: No old files found to delete');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error during file cleanup:', error.message);
+  }
+}
+
+// Run initial cleanup on server start (after a short delay)
+setTimeout(() => {
+  console.log('🧹 Running initial file cleanup on server start...');
+  cleanupOldFiles();
+}, 5000); // Wait 5 seconds after server start
 
 // Serve the main HTML page
 app.get('/', (req, res) => {

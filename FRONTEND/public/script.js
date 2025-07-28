@@ -12,13 +12,86 @@ let downloadStartTime = null;
 let lastDownloadedSong = null;
 
 // Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Hide status panel initially
     statusContainer.classList.remove('show');
+
+    // Add input event listeners to remove error states when user starts typing
+    document.getElementById('songName').addEventListener('input', function () {
+        this.classList.remove('error');
+    });
+
+    document.getElementById('artist').addEventListener('input', function () {
+        this.classList.remove('error');
+    });
+
+    // Mobile menu toggle functionality
+    const navToggle = document.getElementById('navToggle');
+    const navMenu = document.getElementById('navMenu');
+
+    if (navToggle && navMenu) {
+        navToggle.addEventListener('click', function () {
+            navToggle.classList.toggle('active');
+            navMenu.classList.toggle('active');
+        });
+
+        // Close menu when clicking on a link
+        const navLinks = navMenu.querySelectorAll('a');
+        navLinks.forEach(link => {
+            link.addEventListener('click', function () {
+                navToggle.classList.remove('active');
+                navMenu.classList.remove('active');
+            });
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!navToggle.contains(e.target) && !navMenu.contains(e.target)) {
+                navToggle.classList.remove('active');
+                navMenu.classList.remove('active');
+            }
+        });
+    }
+
+    // Scroll animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver(function (entries) {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, observerOptions);
+
+    // Observe elements for animation
+    const animateElements = document.querySelectorAll('.feature-card, .download-card');
+    animateElements.forEach(el => {
+        el.classList.add('fade-in');
+        observer.observe(el);
+    });
+
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                const offsetTop = target.offsetTop - 70; // Account for fixed navbar
+                window.scrollTo({
+                    top: offsetTop,
+                    behavior: 'smooth'
+                });
+            }
+        });
+    });
 });
 
 // Clear form functionality
-clearBtn.addEventListener('click', function() {
+clearBtn.addEventListener('click', function () {
     clearForm();
     showToast('Form cleared!', 'info');
 });
@@ -27,19 +100,43 @@ clearBtn.addEventListener('click', function() {
 function clearForm() {
     document.getElementById('songName').value = '';
     document.getElementById('artist').value = '';
+    document.getElementById('songName').classList.remove('error');
+    document.getElementById('artist').classList.remove('error');
     statusContainer.classList.remove('show');
     resultContainer.innerHTML = '';
+    
+    // Reset progress
+    progressFill.style.width = '0%';
+    const progressText = document.getElementById('progressText');
+    if (progressText) {
+        progressText.textContent = '0%';
+    }
+    
     resetUI();
 }
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const songName = document.getElementById('songName').value.trim();
     const artist = document.getElementById('artist').value.trim();
 
+    // Clear any previous error states
+    document.getElementById('songName').classList.remove('error');
+    document.getElementById('artist').classList.remove('error');
+
+    // Validate that both fields are filled
     if (!songName) {
         showToast('Please enter a song name', 'error');
+        document.getElementById('songName').classList.add('error');
+        document.getElementById('songName').focus();
+        return;
+    }
+
+    if (!artist) {
+        showToast('Please enter an artist name', 'error');
+        document.getElementById('artist').classList.add('error');
+        document.getElementById('artist').focus();
         return;
     }
 
@@ -65,7 +162,7 @@ async function startDownload(songName, artist) {
         });
 
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to start download');
         }
@@ -73,7 +170,7 @@ async function startDownload(songName, artist) {
         currentDownloadId = data.downloadId;
         downloadStartTime = Date.now();
         updateUIState('searching', 'Search request sent to server...', 10, 'fas fa-paper-plane');
-        
+
         // Start checking status after a brief delay
         setTimeout(checkDownloadStatus, 500);
 
@@ -110,66 +207,65 @@ async function checkDownloadStatus() {
 }
 
 function updateStatus(data) {
-    // Calculate elapsed time
-    const elapsedTime = downloadStartTime ? Math.floor((Date.now() - downloadStartTime) / 1000) : 0;
-    const timeStr = elapsedTime > 0 ? ` (${elapsedTime}s)` : '';
-    
+    // Calculate progress percentage
+    const progressPercent = Math.round(data.progress || 0);
+    const percentStr = progressPercent > 0 ? ` (${progressPercent}%)` : '';
+
     // Generate dynamic status messages based on progress and status
     let statusText = '';
     let icon = '';
     let className = '';
-    
-    switch(data.status) {
+
+    switch (data.status) {
         case 'searching':
             if (data.progress < 15) {
-                statusText = `Initializing search...${timeStr}`;
+                statusText = `Initializing search...${percentStr}`;
                 icon = 'fas fa-cog fa-spin';
             } else if (data.progress < 25) {
-                statusText = `Searching JioSaavn for "${data.songName || 'your song'}"...${timeStr}`;
+                statusText = `Searching JioSaavn for "${data.songName || 'your song'}"...${percentStr}`;
                 icon = 'fas fa-search';
             } else {
-                statusText = `Processing search results...${timeStr}`;
+                statusText = `Processing search results...${percentStr}`;
                 icon = 'fas fa-list-ul';
             }
             className = 'searching';
             break;
-            
+
         case 'downloading':
             if (data.progress < 40) {
-                statusText = `Found song! Preparing download...${timeStr}`;
+                statusText = `Found song! Preparing download...${percentStr}`;
                 icon = 'fas fa-play';
             } else if (data.progress < 60) {
-                statusText = `Extracting audio stream...${timeStr}`;
+                statusText = `Extracting audio stream...${percentStr}`;
                 icon = 'fas fa-download fa-pulse';
             } else if (data.progress < 80) {
-                statusText = `Downloading audio file...${timeStr}`;
+                statusText = `Downloading audio file...${percentStr}`;
                 icon = 'fas fa-download';
             } else {
-                statusText = `Finalizing download...${timeStr}`;
+                statusText = `Finalizing download...${percentStr}`;
                 icon = 'fas fa-check-circle';
             }
             className = 'downloading';
             break;
-            
+
         case 'completed':
-            const totalTime = downloadStartTime ? Math.floor((Date.now() - downloadStartTime) / 1000) : 0;
-            statusText = `Download completed in ${totalTime}s!`;
+            statusText = `Download completed successfully! (100%)`;
             icon = 'fas fa-check';
             className = 'completed';
             break;
-            
+
         case 'failed':
             statusText = 'Download failed';
             icon = 'fas fa-times';
             className = 'failed';
             break;
-            
+
         default:
-            statusText = `Processing...${timeStr}`;
+            statusText = `Processing...${percentStr}`;
             icon = 'fas fa-cog fa-spin';
             className = 'searching';
     }
-    
+
     updateUIState(className, statusText, data.progress || 0, icon);
 }
 
@@ -177,7 +273,13 @@ function updateUIState(status, text, progress, icon = 'fas fa-search') {
     statusIcon.className = `status-icon ${status}`;
     statusIcon.innerHTML = `<i class="${icon}"></i>`;
     statusText.textContent = text;
-    
+
+    // Update progress text
+    const progressText = document.getElementById('progressText');
+    if (progressText) {
+        progressText.textContent = `${Math.round(progress)}%`;
+    }
+
     // Smooth progress bar animation
     const currentProgress = parseInt(progressFill.style.width) || 0;
     animateProgress(currentProgress, progress);
@@ -188,9 +290,9 @@ function animateProgress(from, to) {
     const steps = 20;
     const stepSize = (to - from) / steps;
     const stepDuration = duration / steps;
-    
+
     let currentStep = 0;
-    
+
     const animate = () => {
         if (currentStep <= steps) {
             const currentValue = from + (stepSize * currentStep);
@@ -199,7 +301,7 @@ function animateProgress(from, to) {
             setTimeout(animate, stepDuration);
         }
     };
-    
+
     animate();
 }
 
@@ -211,7 +313,7 @@ function showSuccess(data) {
         downloadUrl: data.downloadUrl,
         fileName: data.fileName
     };
-    
+
     resultContainer.innerHTML = `
         <div class="success-card">
             <i class="fas fa-check-circle" style="font-size: 36px; margin-bottom: 12px;"></i>
@@ -237,7 +339,7 @@ function showSuccess(data) {
 
 function showError(message) {
     const formattedMessage = message.replace(/\n/g, '<br>');
-    
+
     resultContainer.innerHTML = `
         <div class="error-card">
             <i class="fas fa-exclamation-triangle" style="font-size: 20px; margin-bottom: 8px;"></i>
@@ -300,7 +402,7 @@ function showToast(message, type = 'info') {
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         toast.style.animation = 'slideOutRight 0.3s ease-out';
         setTimeout(() => document.body.removeChild(toast), 300);
@@ -308,11 +410,7 @@ function showToast(message, type = 'info') {
 }
 
 function resetUI() {
-    downloadBtn.disabled = false;
-    downloadBtn.innerHTML = `
-        <i class="fas fa-download"></i>
-        Download
-    `;
+    setButtonLoading(false);
     currentDownloadId = null;
     downloadStartTime = null;
 }
@@ -320,11 +418,10 @@ function resetUI() {
 function setButtonLoading(loading) {
     downloadBtn.disabled = loading;
     if (loading) {
-        downloadBtn.innerHTML = `
-            <div class="spinner"></div>
-            <span>Processing...</span>
-        `;
+        downloadBtn.classList.add('loading');
+        downloadBtn.innerHTML = `Processing...`;
     } else {
+        downloadBtn.classList.remove('loading');
         downloadBtn.innerHTML = `
             <i class="fas fa-download"></i>
             Download
@@ -335,7 +432,7 @@ function setButtonLoading(loading) {
 // Override original functions to include button states
 const originalStartDownload = startDownload;
 
-startDownload = async function(songName, artist) {
+startDownload = async function (songName, artist) {
     setButtonLoading(true);
     return originalStartDownload(songName, artist);
 };
