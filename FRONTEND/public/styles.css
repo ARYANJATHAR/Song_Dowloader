@@ -338,9 +338,11 @@ html {
 
 .button-group {
     display: flex;
-    gap: 16px;
+    gap: 12px;
     margin-top: 32px;
 }
+
+
 
 .download-button {
     flex: 2;
@@ -562,6 +564,85 @@ html {
 .result-container {
     margin-top: 16px;
 }
+
+/* Audio Player Styles */
+.audio-player-container {
+    margin-top: 24px;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.audio-player-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 24px;
+    color: white;
+    box-shadow: 0 15px 35px rgba(102, 126, 234, 0.3);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.audio-player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.song-info h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.3rem;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.song-info p {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 1rem;
+    font-weight: 400;
+}
+
+.close-player-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.close-player-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.audio-player-controls {
+    margin-bottom: 20px;
+}
+
+.audio-player-controls audio {
+    width: 100%;
+    height: 50px;
+    border-radius: 25px;
+    outline: none;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    display: block;
+    margin: 0 auto;
+}
+
+.audio-player-controls audio::-webkit-media-controls-panel {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 25px;
+}
+
+
 
 /* Features Section */
 .features {

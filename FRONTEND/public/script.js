@@ -7,9 +7,19 @@ const resultContainer = document.getElementById('resultContainer');
 const downloadBtn = document.getElementById('downloadBtn');
 const clearBtn = document.getElementById('clearBtn');
 
+// Audio player elements
+const audioPlayerContainer = document.getElementById('audioPlayerContainer');
+const audioPlayer = document.getElementById('audioPlayer');
+const audioSource = document.getElementById('audioSource');
+const playerSongTitle = document.getElementById('playerSongTitle');
+const playerSongArtist = document.getElementById('playerSongArtist');
+const closePlayerBtn = document.getElementById('closePlayerBtn');
+
 let currentDownloadId = null;
+let currentPreviewId = null;
 let downloadStartTime = null;
 let lastDownloadedSong = null;
+let currentPreviewData = null;
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
@@ -93,6 +103,7 @@ document.addEventListener('DOMContentLoaded', function () {
 // Clear form functionality
 clearBtn.addEventListener('click', function () {
     clearForm();
+    hideAudioPlayer();
     showToast('Form cleared!', 'info');
 });
 
@@ -114,6 +125,45 @@ function clearForm() {
     
     resetUI();
 }
+
+// Audio player event listeners
+closePlayerBtn.addEventListener('click', function () {
+    hideAudioPlayer();
+});
+
+
+
+
+
+// Audio player functions
+function showAudioPlayer(previewData) {
+    playerSongTitle.textContent = previewData.songName || 'Unknown Song';
+    playerSongArtist.textContent = previewData.artist || 'Unknown Artist';
+    
+    // Set audio source using our proxy to avoid CORS issues
+    if (previewData.previewUrl) {
+        const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(previewData.previewUrl)}`;
+        audioSource.src = proxyUrl;
+        audioPlayer.load();
+        
+        showToast('Preview & Download starting together!', 'success');
+    }
+    
+    // Show player with animation
+    audioPlayerContainer.style.display = 'block';
+    
+    // Store current preview data
+    currentPreviewData = previewData;
+}
+
+function hideAudioPlayer() {
+    audioPlayerContainer.style.display = 'none';
+    audioPlayer.pause();
+    audioSource.src = '';
+    currentPreviewData = null;
+}
+
+
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -146,8 +196,370 @@ form.addEventListener('submit', async (e) => {
         artist: artist
     };
 
-    startDownload(songName, artist);
+    startPreviewAndDownload(songName, artist);
 });
+
+async function startPreviewAndDownload(songName, artist) {
+    try {
+        showStatusPanel();
+        hideAudioPlayer(); // Hide any existing player
+        const searchQuery = artist ? `${songName} by ${artist}` : songName;
+        updateUIState('searching', `Starting search for "${searchQuery}"...`, 5, 'fas fa-search');
+
+        const response = await fetch('/api/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ songName, artist })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to start search');
+        }
+
+        currentPreviewId = data.previewId;
+        downloadStartTime = Date.now();
+        updateUIState('searching', 'Search request sent to server...', 10, 'fas fa-paper-plane');
+
+        // Start checking preview status
+        setTimeout(checkPreviewAndDownloadStatus, 500);
+
+    } catch (error) {
+        showError('Failed to start search: ' + error.message);
+        resetUI();
+    }
+}
+
+async function checkPreviewAndDownloadStatus() {
+    if (!currentPreviewId) return;
+
+    try {
+        const response = await fetch(`/api/download-status/${currentPreviewId}`);
+        const data = await response.json();
+
+        updatePreviewStatus(data);
+
+        if (data.status === 'completed' && data.type === 'preview') {
+            // Start both preview and download at the exact same moment
+            if (data.songUrl) {
+                // Start download request immediately (no await - let it run parallel)
+                startSimultaneousDownload(data.songUrl, data.songName, data.artist);
+                
+                // Show preview immediately (both happen together)
+                showAudioPlayer(data);
+            } else {
+                showAudioPlayer(data);
+                resetUI();
+            }
+        } else if (data.status === 'failed') {
+            showError(data.error || 'Search failed');
+            resetUI();
+        } else {
+            // Check more frequently for active searches
+            setTimeout(checkPreviewAndDownloadStatus, 1000);
+        }
+
+    } catch (error) {
+        showError('Failed to check search status');
+        resetUI();
+    }
+}
+
+async function startSimultaneousDownload(songUrl, songName, artist) {
+    try {
+        console.log('🎵 Starting simultaneous preview + download for:', songName);
+        
+        // Don't show status panel again - it's already visible from search
+        // Just update the existing status to download
+        updateUIState('downloading', 'Starting download...', 10, 'fas fa-download');
+        
+        const response = await fetch('/api/direct-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ songUrl })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to start download');
+        }
+
+        currentDownloadId = data.downloadId;
+        downloadStartTime = Date.now();
+        updateUIState('downloading', 'Download started...', 15, 'fas fa-download');
+        
+        // Start checking download status immediately
+        setTimeout(checkDownloadStatus, 1000);
+        
+        showToast('Preview & Download both active!', 'success');
+
+    } catch (error) {
+        console.error('Simultaneous download failed:', error);
+        showToast('Preview available, but download failed', 'error');
+    }
+}
+
+async function startDirectDownloadBackground(songUrl, songName, artist) {
+    try {
+        console.log('🚀 Starting background download for:', songName);
+        
+        const response = await fetch('/api/direct-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ songUrl })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to start background download');
+        }
+
+        currentDownloadId = data.downloadId;
+        
+        // Start checking download status in background
+        setTimeout(checkBackgroundDownloadStatus, 2000);
+        
+        showToast('Download started in background!', 'success');
+
+    } catch (error) {
+        console.error('Background download failed:', error);
+        showToast('Preview available, but download failed to start', 'error');
+    }
+}
+
+async function checkBackgroundDownloadStatus() {
+    if (!currentDownloadId) return;
+
+    try {
+        const response = await fetch(`/api/download-status/${currentDownloadId}`);
+        const data = await response.json();
+
+        if (data.status === 'completed') {
+            // Update the result container with download link
+            showBackgroundDownloadComplete(data);
+        } else if (data.status === 'failed') {
+            showToast('Background download failed', 'error');
+        } else {
+            // Check again
+            setTimeout(checkBackgroundDownloadStatus, 2000);
+        }
+
+    } catch (error) {
+        console.error('Failed to check background download status');
+    }
+}
+
+function showBackgroundDownloadComplete(data) {
+    // Add download success message to result container
+    resultContainer.innerHTML = `
+        <div class="success-card" style="margin-top: 16px;">
+            <i class="fas fa-check-circle" style="font-size: 24px; margin-bottom: 8px;"></i>
+            <h4 style="margin-bottom: 8px;">Download Ready!</h4>
+            <p style="margin-bottom: 12px; opacity: 0.9; font-size: 0.9rem;">
+                Your song has been processed and is ready to download
+            </p>
+            
+            <div class="download-options">
+                <a href="${data.downloadUrl}" class="download-link primary" download target="_blank">
+                    <i class="fas fa-download"></i>
+                    Download Song
+                </a>
+            </div>
+        </div>
+    `;
+    
+    showToast('Song ready for download!', 'success');
+}
+
+async function startPreview(songName, artist) {
+    try {
+        showStatusPanel();
+        hideAudioPlayer(); // Hide any existing player
+        const searchQuery = artist ? `${songName} by ${artist}` : songName;
+        updateUIState('searching', `Starting preview for "${searchQuery}"...`, 5, 'fas fa-search');
+
+        const response = await fetch('/api/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ songName, artist })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to start preview');
+        }
+
+        currentPreviewId = data.previewId;
+        downloadStartTime = Date.now();
+        updateUIState('searching', 'Preview request sent to server...', 10, 'fas fa-paper-plane');
+
+        // Start checking preview status
+        setTimeout(checkPreviewStatus, 500);
+
+    } catch (error) {
+        showError('Failed to start preview: ' + error.message);
+        resetUI();
+    }
+}
+
+async function checkPreviewStatus() {
+    if (!currentPreviewId) return;
+
+    try {
+        const response = await fetch(`/api/download-status/${currentPreviewId}`);
+        const data = await response.json();
+
+        updatePreviewStatus(data);
+
+        if (data.status === 'completed') {
+            showAudioPlayer(data);
+            resetUI();
+        } else if (data.status === 'failed') {
+            showError(data.error || 'Preview failed');
+            resetUI();
+        } else {
+            // Check more frequently for active previews
+            setTimeout(checkPreviewStatus, 1000);
+        }
+
+    } catch (error) {
+        showError('Failed to check preview status');
+        resetUI();
+    }
+}
+
+function updatePreviewStatus(data) {
+    // Calculate progress percentage
+    const progressPercent = Math.round(data.progress || 0);
+    const percentStr = progressPercent > 0 ? ` (${progressPercent}%)` : '';
+
+    // Generate dynamic status messages based on progress and status
+    let statusText = '';
+    let icon = '';
+    let className = '';
+
+    switch (data.status) {
+        case 'searching':
+            if (data.progress < 15) {
+                statusText = `Initializing preview search...${percentStr}`;
+                icon = 'fas fa-cog fa-spin';
+            } else if (data.progress < 25) {
+                statusText = `Searching JioSaavn for "${data.songName || 'your song'}"...${percentStr}`;
+                icon = 'fas fa-search';
+            } else {
+                statusText = `Processing search results...${percentStr}`;
+                icon = 'fas fa-list-ul';
+            }
+            className = 'searching';
+            break;
+
+        case 'extracting':
+            if (data.progress < 40) {
+                statusText = `Found song! Preparing preview...${percentStr}`;
+                icon = 'fas fa-play';
+            } else if (data.progress < 60) {
+                statusText = `Extracting audio stream...${percentStr}`;
+                icon = 'fas fa-music fa-pulse';
+            } else if (data.progress < 80) {
+                statusText = `Getting preview URL...${percentStr}`;
+                icon = 'fas fa-link';
+            } else {
+                statusText = `Finalizing preview...${percentStr}`;
+                icon = 'fas fa-check-circle';
+            }
+            className = 'downloading';
+            break;
+
+        case 'completed':
+            statusText = `Preview ready! (100%)`;
+            icon = 'fas fa-check';
+            className = 'completed';
+            break;
+
+        case 'failed':
+            statusText = 'Preview failed';
+            icon = 'fas fa-times';
+            className = 'failed';
+            break;
+
+        default:
+            statusText = `Processing preview...${percentStr}`;
+            icon = 'fas fa-cog fa-spin';
+            className = 'searching';
+    }
+
+    updateUIState(className, statusText, data.progress || 0, icon);
+}
+
+async function startDirectDownload(songUrl, songName, artist) {
+    try {
+        // Set download button loading state
+        downloadFromPlayerBtn.classList.add('loading');
+        downloadFromPlayerBtn.disabled = true;
+        
+        showStatusPanel();
+        updateUIState('downloading', 'Starting download...', 10, 'fas fa-download');
+
+        const response = await fetch('/api/direct-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ songUrl })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to start download');
+        }
+
+        currentDownloadId = data.downloadId;
+        downloadStartTime = Date.now();
+        updateUIState('downloading', 'Download started...', 15, 'fas fa-download');
+
+        // Start checking download status
+        setTimeout(checkDownloadStatus, 500);
+
+    } catch (error) {
+        showError('Failed to start download: ' + error.message);
+        resetUI();
+    }
+}
+
+
+
+async function convertPreviewToDownload(previewId) {
+    try {
+        showStatusPanel();
+        updateUIState('downloading', 'Converting preview to download...', 10, 'fas fa-download');
+
+        const response = await fetch('/api/convert-to-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ previewId })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to convert to download');
+        }
+
+        currentDownloadId = data.downloadId;
+        downloadStartTime = Date.now();
+        updateUIState('downloading', 'Download started...', 15, 'fas fa-download');
+
+        // Start checking download status
+        setTimeout(checkDownloadStatus, 500);
+
+    } catch (error) {
+        showError('Failed to convert to download: ' + error.message);
+        resetUI();
+    }
+}
 
 async function startDownload(songName, artist) {
     try {
@@ -412,6 +824,7 @@ function showToast(message, type = 'info') {
 function resetUI() {
     setButtonLoading(false);
     currentDownloadId = null;
+    currentPreviewId = null;
     downloadStartTime = null;
 }
 
@@ -430,11 +843,11 @@ function setButtonLoading(loading) {
 }
 
 // Override original functions to include button states
-const originalStartDownload = startDownload;
+const originalStartPreview = startPreview;
 
-startDownload = async function (songName, artist) {
+startPreview = async function (songName, artist) {
     setButtonLoading(true);
-    return originalStartDownload(songName, artist);
+    return originalStartPreview(songName, artist);
 };
 
 // Add slide animations for toast

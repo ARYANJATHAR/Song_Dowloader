@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 const AudioScraper = require('./advanced_scraper.js');
 const JioSaavnSearcher = require('./jiosaavn_search.js');
 
@@ -113,6 +114,130 @@ app.get('/api/download-status/:downloadId', (req, res) => {
   res.json(download);
 });
 
+// Preview endpoint - gets audio URL without downloading
+app.post('/api/preview', async (req, res) => {
+  try {
+    const { songName, artist = '' } = req.body;
+    
+    if (!songName) {
+      return res.status(400).json({ error: 'Song name is required' });
+    }
+
+    const previewId = Date.now().toString();
+    
+    // Store preview status
+    activeDownloads.set(previewId, {
+      status: 'searching',
+      songName,
+      artist,
+      progress: 0,
+      type: 'preview'
+    });
+
+    // Send immediate response with preview ID
+    res.json({
+      previewId,
+      message: 'Preview started',
+      status: 'searching'
+    });
+
+    // Start preview process in background
+    processPreview(previewId, songName, artist);
+
+  } catch (error) {
+    console.error('Error starting preview:', error);
+    res.status(500).json({ error: 'Failed to start preview' });
+  }
+});
+
+// Convert preview to download
+app.post('/api/convert-to-download', async (req, res) => {
+  try {
+    const { previewId } = req.body;
+    
+    if (!previewId) {
+      return res.status(400).json({ error: 'Preview ID is required' });
+    }
+
+    const previewData = activeDownloads.get(previewId);
+    if (!previewData || previewData.type !== 'preview' || previewData.status !== 'completed') {
+      return res.status(404).json({ error: 'Preview not found or not completed' });
+    }
+
+    const downloadId = Date.now().toString();
+    
+    // Store download status with preview data
+    activeDownloads.set(downloadId, {
+      status: 'downloading',
+      songName: previewData.songName,
+      artist: previewData.artist,
+      progress: 10,
+      url: previewData.songUrl,
+      type: 'download'
+    });
+
+    // Send immediate response with download ID
+    res.json({
+      downloadId,
+      message: 'Converting preview to download',
+      status: 'downloading'
+    });
+
+    // Start download process using the song URL from preview
+    processDirectDownload(downloadId, previewData.songUrl);
+
+  } catch (error) {
+    console.error('Error converting preview to download:', error);
+    res.status(500).json({ error: 'Failed to convert preview to download' });
+  }
+});
+
+// Audio proxy endpoint to solve CORS issues for preview
+app.get('/api/proxy-audio', async (req, res) => {
+  try {
+    const { url } = req.query;
+    
+    if (!url) {
+      return res.status(400).json({ error: 'Audio URL is required' });
+    }
+
+    console.log(`🎵 Proxying audio: ${url}`);
+
+    // Set appropriate headers for audio streaming
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+
+    // Stream the audio through our server using axios
+    const response = await axios({
+      url,
+      method: 'GET',
+      responseType: 'stream',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': 'https://www.jiosaavn.com/',
+        'Accept': 'audio/*,*/*;q=0.1'
+      }
+    });
+
+    // Copy response headers
+    if (response.headers['content-length']) {
+      res.setHeader('Content-Length', response.headers['content-length']);
+    }
+    if (response.headers['content-range']) {
+      res.setHeader('Content-Range', response.headers['content-range']);
+    }
+
+    // Pipe the audio stream
+    response.data.pipe(res);
+
+  } catch (error) {
+    console.error('Audio proxy error:', error);
+    res.status(500).json({ error: 'Failed to proxy audio' });
+  }
+});
+
 app.get('/api/download-file/:downloadId', (req, res) => {
   const { downloadId } = req.params;
   const download = activeDownloads.get(downloadId);
@@ -173,6 +298,100 @@ async function searchJioSaavn(songName, artist = '') {
       console.error('Fallback search also failed:', fallbackError.message);
       throw new Error(`Search failed for "${songName}". Both primary and fallback methods failed.`);
     }
+  }
+}
+
+// Process preview in background (gets audio URL without downloading)
+async function processPreview(previewId, songName, artist) {
+  try {
+    // Update status to searching
+    activeDownloads.set(previewId, {
+      ...activeDownloads.get(previewId),
+      status: 'searching',
+      progress: 10
+    });
+
+    // Search for song URL
+    let songUrl;
+    try {
+      console.log(`🔍 Searching for preview: "${songName}" by "${artist || 'Unknown Artist'}"`);
+      songUrl = await searchJioSaavn(songName, artist);
+      console.log(`✅ Found song URL for preview: ${songUrl}`);
+    } catch (error) {
+      console.error('Preview search failed:', error.message);
+      throw new Error(`Search failed: ${error.message}`);
+    }
+    
+    // Check if the search returned a meaningful result
+    if (!songUrl || songUrl.includes('undefined') || songUrl.includes('null')) {
+      throw new Error(`No valid song found for "${songName}". JioSaavn search may not be working properly.`);
+    }
+    
+    // Update status to extracting
+    activeDownloads.set(previewId, {
+      ...activeDownloads.get(previewId),
+      status: 'extracting',
+      progress: 30,
+      url: songUrl
+    });
+
+    // Initialize scraper for audio URL extraction only
+    const scraper = new AudioScraper({
+      timeout: 20000,
+      waitForAudio: 8000,
+      downloadDir: path.join(__dirname, '../downloads') // Not used for preview
+    });
+
+    // Extract audio URLs without downloading
+    console.log(`🚀 Extracting audio URLs for preview: ${songName} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+    const audioUrls = await scraper.getAudioUrls(songUrl);
+
+    if (audioUrls && audioUrls.length > 0) {
+      // Get the best quality audio URL (usually the last one is highest quality)
+      const previewUrl = audioUrls[audioUrls.length - 1];
+      console.log(`✅ Preview URL extracted: ${previewUrl}`);
+      
+      // Update status to completed with preview info
+      activeDownloads.set(previewId, {
+        ...activeDownloads.get(previewId),
+        status: 'completed',
+        progress: 100,
+        previewUrl: previewUrl,
+        audioUrls: audioUrls, // Store all URLs for quality selection
+        songUrl: songUrl, // Store original song page URL
+        type: 'preview'
+      });
+
+      console.log(`✅ Preview ready for: ${songName}`);
+    } else {
+      throw new Error('No audio URLs found - the page may not contain streamable audio');
+    }
+
+  } catch (error) {
+    console.error(`❌ Preview failed for ${songName}:`, error.message);
+    
+    // Provide more helpful error messages
+    let userFriendlyError = error.message;
+    
+    if (error.message.includes('search may not be working')) {
+      userFriendlyError = `Unable to find "${songName}" on JioSaavn. Please try:\n` +
+                         `• A more specific song name\n` +
+                         `• Including the movie/album name\n` +
+                         `• A different, popular song that you know exists on JioSaavn\n` +
+                         `• Example: "Kesariya Brahmastra" or "Tum Hi Ho Aashiqui"`;
+    } else if (error.message.includes('No audio URLs found')) {
+      userFriendlyError = `Found the song page but couldn't extract preview. This might be due to:\n` +
+                         `• Changed website structure\n` +
+                         `• Audio content protection\n` +
+                         `• Network issues`;
+    }
+    
+    activeDownloads.set(previewId, {
+      ...activeDownloads.get(previewId),
+      status: 'failed',
+      error: userFriendlyError,
+      type: 'preview'
+    });
   }
 }
 
