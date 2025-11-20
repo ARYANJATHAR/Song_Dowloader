@@ -561,6 +561,12 @@ class JioSaavnSearcher {
       const titleMatches = titleLower.includes(targetLower) || targetLower.includes(titleLower);
       const artistMatches = !artist || artistLower.includes(targetArtistLower) || targetArtistLower.includes(artistLower);
 
+      // If we have a high score match, return it immediately without alternative searches
+      if (bestMatch.score >= 4000) {
+        console.log(`✅ High confidence match found (Score: ${bestMatch.score}). Skipping alternative searches.`);
+        return bestMatch.url;
+      }
+
       // If we don't have a good match, try multiple alternative search strategies
       if (bestMatch.score < 1000 || !titleMatches || !artistMatches) {
         console.log(`⚠️  Warning: Best match may not be correct. Title match: ${titleMatches}, Artist match: ${artistMatches}, Score: ${bestMatch.score}`);

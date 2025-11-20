@@ -35,6 +35,91 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../FRONTEND/public/index.html'));
 });
 
+// Helper to fetch metadata from JioSaavn page (lightweight)
+async function fetchMetadataFromUrl(url) {
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    
+    const html = response.data;
+    
+    // Helper to clean JSON strings
+    const cleanString = (str) => {
+      if (!str) return '';
+      try {
+        // Remove JSON escaping backslashes
+        return JSON.parse(`"${str}"`);
+      } catch (e) {
+        return str.replace(/\\u002F/g, '/').replace(/\\"/g, '"');
+      }
+    };
+
+    // 1. Try extracting from JSON-LD (most reliable)
+    let metadata = {};
+    try {
+      const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+      if (jsonLdMatch && jsonLdMatch[1]) {
+        const jsonLd = JSON.parse(jsonLdMatch[1]);
+        // Find the MusicRecording entity
+        const track = Array.isArray(jsonLd) ? jsonLd.find(item => item['@type'] === 'MusicRecording') : 
+                      (jsonLd['@type'] === 'MusicRecording' ? jsonLd : null);
+        
+        if (track) {
+          metadata.title = track.name;
+          metadata.artist = Array.isArray(track.byArtist) ? track.byArtist.map(a => a.name).join(', ') : track.byArtist?.name;
+          metadata.album = track.inAlbum?.name;
+          metadata.image = track.image;
+          metadata.year = track.datePublished ? new Date(track.datePublished).getFullYear().toString() : '';
+          
+          console.log('✅ Extracted metadata from JSON-LD');
+          return metadata;
+        }
+      }
+    } catch (e) {
+      console.log('⚠️ JSON-LD extraction failed, falling back to regex');
+    }
+
+    // 2. Fallback to Regex extraction
+    // Extract Title
+    const titleMatch = html.match(/"name"\s*:\s*"([^"]+)"/) || html.match(/<meta property="og:title" content="([^"]+)"/);
+    
+    // Extract Artist
+    // Look for artist in JSON structure or meta tags
+    const artistMatch = html.match(/"byArtist"\s*:\s*\[(.*?)\]/s);
+    let artist = '';
+    if (artistMatch) {
+      const artistBlock = artistMatch[1];
+      const names = artistBlock.match(/"name"\s*:\s*"([^"]+)"/g);
+      if (names) {
+        artist = names.map(n => n.match(/"name"\s*:\s*"([^"]+)"/)[1]).join(', ');
+      }
+    }
+    
+    // Extract Album
+    const albumMatch = html.match(/"inAlbum"\s*:\s*{[^}]*"name"\s*:\s*"([^"]+)"/);
+    
+    // Extract Image
+    const imageMatch = html.match(/"image"\s*:\s*"([^"]+)"/) || html.match(/<meta property="og:image" content="([^"]+)"/);
+    
+    // Extract Year
+    const yearMatch = html.match(/"datePublished"\s*:\s*"(\d{4})/);
+
+    return {
+      title: titleMatch ? cleanString(titleMatch[1]) : '',
+      artist: artist ? cleanString(artist) : '',
+      album: albumMatch ? cleanString(albumMatch[1]) : '',
+      image: imageMatch ? cleanString(imageMatch[1]).replace('150x150', '500x500') : '',
+      year: yearMatch ? yearMatch[1] : ''
+    };
+  } catch (error) {
+    console.error('❌ Failed to fetch metadata from URL:', error.message);
+    return {};
+  }
+}
+
 // API Routes
 app.post('/api/search-and-download', async (req, res) => {
   try {
@@ -72,7 +157,7 @@ app.post('/api/search-and-download', async (req, res) => {
 
 app.post('/api/direct-download', async (req, res) => {
   try {
-    const { songUrl, audioUrl } = req.body;
+    const { songUrl, audioUrl, songName, artist } = req.body;
     
     if (!songUrl || !songUrl.includes('jiosaavn.com/song/')) {
       return res.status(400).json({ error: 'Valid JioSaavn song URL is required' });
@@ -84,6 +169,8 @@ app.post('/api/direct-download', async (req, res) => {
     activeDownloads.set(downloadId, {
       status: 'downloading',
       songUrl,
+      songName,
+      artist,
       progress: 10
     });
 
@@ -250,7 +337,9 @@ app.get('/api/download-file/:downloadId', (req, res) => {
   if (download.fileName && fs.existsSync(download.fileName)) {
     console.log(`📥 Serving local file: ${download.fileName}`);
     const fileName = path.basename(download.fileName);
-    res.setHeader('Content-Disposition', `attachment; filename="${download.songName || 'audio'}.mp4"`);
+    // Sanitize filename to remove invalid characters
+    const safeSongName = (download.songName || 'audio').replace(/[<>:"/\\|?*]/g, '');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeSongName}.mp4"`);
     res.setHeader('Content-Type', 'audio/mp4');
     return res.sendFile(path.resolve(download.fileName));
   }
@@ -258,7 +347,8 @@ app.get('/api/download-file/:downloadId', (req, res) => {
   // Fallback to redirect if no local file
   if (download.audioUrl) {
     console.log(`🔗 Redirecting to source: ${download.audioUrl}`);
-    res.setHeader('Content-Disposition', `attachment; filename="${download.songName || 'audio'}.mp4"`);
+    const safeSongName = (download.songName || 'audio').replace(/[<>:"/\\|?*]/g, '');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeSongName}.mp4"`);
     res.setHeader('Content-Type', 'audio/mp4');
     return res.redirect(download.audioUrl);
   }
@@ -518,7 +608,7 @@ async function processDirectDownload(downloadId, songUrl, directAudioUrl = null)
         // or we can use scraper.downloadAudioFiles if we mock the input
         
         // Let's use a simple download implementation here to be safe and fast
-        const extension = path.extname(directAudioUrl.split('?')[0]) || '.mp4';
+        const extension = '.mp4';
         const timestamp = Date.now();
         const fileName = path.join(__dirname, '../downloads', `audio_${timestamp}${extension}`);
         
@@ -548,10 +638,14 @@ async function processDirectDownload(downloadId, songUrl, directAudioUrl = null)
 
         const stats = fs.statSync(fileName);
         if (stats.size > 1024) {
+          // Fetch metadata separately for direct download
+          const metadata = await fetchMetadataFromUrl(songUrl);
+
           downloadedFiles.push({
             fileName: fileName,
             url: directAudioUrl,
-            size: stats.size
+            size: stats.size,
+            metadata // Store for consistency
           });
         } else {
           fs.unlinkSync(fileName);

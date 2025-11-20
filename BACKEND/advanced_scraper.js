@@ -87,6 +87,10 @@ class AudioScraper {
       // Navigate and interact with the page
       await this.navigateAndInteract(page, url);
 
+      // Extract metadata from the page
+      const metadata = await this.extractMetadata(page);
+      console.log('📝 Extracted Metadata:', metadata);
+
       // Download found audio files
       const downloadedFiles = await this.downloadAudioFiles(audioUrls, responses, page.url());
 
@@ -109,10 +113,88 @@ class AudioScraper {
         throw new Error('No audio files could be downloaded from the page');
       }
 
-      return downloadedFiles;
+      // Attach metadata to downloaded files
+      return downloadedFiles.map(file => ({
+        ...file,
+        metadata
+      }));
 
     } finally {
       await browser.close();
+    }
+  }
+
+  async extractMetadata(page) {
+    try {
+      return await page.evaluate(() => {
+        const metadata = {
+          title: '',
+          artist: '',
+          album: '',
+          year: '',
+          image: ''
+        };
+
+        // Try to get title
+        const titleSelectors = ['h1', '.title', '.song-name', '.c-media__title'];
+        for (const selector of titleSelectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            metadata.title = el.textContent.trim();
+            break;
+          }
+        }
+
+        // Try to get artist
+        const artistSelectors = ['.artist', '.song-artist', '.c-media__subtitle', '.song-artists'];
+        for (const selector of artistSelectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            metadata.artist = el.textContent.trim();
+            break;
+          }
+        }
+
+        // Try to get album
+        const albumSelectors = ['.album', '.song-album', 'a[href*="/album/"]'];
+        for (const selector of albumSelectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            metadata.album = el.textContent.trim();
+            break;
+          }
+        }
+
+        // Try to get year
+        const yearSelectors = ['.year', '.meta-data', '.c-meta__details'];
+        for (const selector of yearSelectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            const text = el.textContent;
+            const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+            if (yearMatch) {
+              metadata.year = yearMatch[0];
+              break;
+            }
+          }
+        }
+
+        // Try to get image
+        const imgSelectors = ['.cover img', '.c-media__image img', 'img[alt*="cover"]', 'img[src*="150x150"]', 'img[src*="500x500"]'];
+        for (const selector of imgSelectors) {
+          const el = document.querySelector(selector);
+          if (el && el.src) {
+            // Get higher quality image if possible
+            metadata.image = el.src.replace('150x150', '500x500').replace('50x50', '500x500');
+            break;
+          }
+        }
+
+        return metadata;
+      });
+    } catch (error) {
+      console.log('⚠️ Failed to extract metadata:', error.message);
+      return {};
     }
   }
 
