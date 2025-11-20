@@ -4,12 +4,46 @@
 :root {
     --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
     --secondary-gradient: linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%);
+    
+    /* Light Mode (Default) */
+    --bg-color: #f3f4f6;
     --surface-color: rgba(255, 255, 255, 0.7);
     --surface-border: rgba(255, 255, 255, 0.5);
     --text-primary: #1e293b;
     --text-secondary: #64748b;
     --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
     --glass-blur: 20px;
+    --nav-bg: rgba(255, 255, 255, 0.8);
+    --nav-border: rgba(255, 255, 255, 0.3);
+    --card-bg: white;
+    --input-bg: white;
+    --input-text: #1e293b;
+    --input-placeholder: #cbd5e1;
+    --hover-bg: #f8fafc;
+    --footer-bg: white;
+    --footer-border: #f1f5f9;
+    --toggle-bg: #e2e8f0;
+    --toggle-icon: #64748b;
+}
+
+body.dark-mode {
+    --bg-color: #0f172a;
+    --surface-color: rgba(30, 41, 59, 0.7);
+    --surface-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    --nav-bg: rgba(15, 23, 42, 0.8);
+    --nav-border: rgba(255, 255, 255, 0.1);
+    --card-bg: #1e293b;
+    --input-bg: #334155;
+    --input-text: #f1f5f9;
+    --input-placeholder: #64748b;
+    --hover-bg: #334155;
+    --footer-bg: #0f172a;
+    --footer-border: #1e293b;
+    --toggle-bg: #334155;
+    --toggle-icon: #fbbf24;
 }
 
 * {
@@ -22,9 +56,10 @@ body {
     font-family: 'Outfit', sans-serif;
     line-height: 1.6;
     color: var(--text-primary);
-    background-color: #f3f4f6;
+    background-color: var(--bg-color);
     overflow-x: hidden;
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Animated Background Shapes */
@@ -88,9 +123,9 @@ body {
 
 /* Navigation */
 .navbar {
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--nav-bg);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 1px solid var(--nav-border);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -113,7 +148,7 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
     font-family: 'Space Grotesk', sans-serif;
-    color: #1e293b;
+    color: var(--text-primary);
     text-decoration: none;
 }
 
@@ -168,8 +203,28 @@ body {
 .nav-toggle span {
     width: 30px;
     height: 3px;
-    background: #1e293b;
+    background: var(--text-primary);
     border-radius: 3px;
+}
+
+.theme-toggle {
+    background: var(--toggle-bg);
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--toggle-icon);
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+    margin-left: 20px;
+}
+
+.theme-toggle:hover {
+    transform: rotate(15deg) scale(1.1);
 }
 
 /* Hero Section */
@@ -278,7 +333,8 @@ body {
     border-radius: 15px;
     font-size: 1.1rem;
     font-family: 'Outfit', sans-serif;
-    background: white;
+    background: var(--input-bg);
+    color: var(--input-text);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     transition: all 0.3s ease;
 }
@@ -291,7 +347,7 @@ body {
 }
 
 .form-input::placeholder {
-    color: #cbd5e1;
+    color: var(--input-placeholder);
 }
 
 /* Suggestions List */
@@ -300,7 +356,7 @@ body {
     top: 100%;
     left: 0;
     width: 100%;
-    background: white;
+    background: var(--card-bg);
     border-radius: 15px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     list-style: none;
@@ -321,7 +377,7 @@ body {
     padding: 15px 25px;
     cursor: pointer;
     transition: all 0.2s ease;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--footer-border);
     display: flex;
     flex-direction: column;
 }
@@ -331,7 +387,7 @@ body {
 }
 
 .suggestion-item:hover {
-    background: #f8fafc;
+    background: var(--hover-bg);
     padding-left: 30px;
 }
 
@@ -378,9 +434,9 @@ body {
 
 .clear-button {
     flex: 1;
-    background: white;
+    background: var(--card-bg);
     color: var(--text-secondary);
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--footer-border);
     padding: 20px;
     border-radius: 15px;
     font-size: 1.1rem;
@@ -394,7 +450,7 @@ body {
 }
 
 .clear-button:hover {
-    background: #f8fafc;
+    background: var(--hover-bg);
     border-color: #cbd5e1;
     color: var(--text-primary);
     transform: translateY(-2px);
@@ -404,15 +460,43 @@ body {
 .status-panel {
     margin-top: 40px;
     padding: 30px;
-    background: rgba(255, 255, 255, 0.6);
+    background: var(--surface-color);
     border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--surface-border);
     display: none;
 }
 
 .status-panel.show {
     display: block;
     animation: slideUp 0.5s ease-out;
+}
+/* ...existing code... */
+/* Audio Player */
+.audio-player-container {
+    margin-top: 30px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+/* ...existing code... */
+.close-player-btn {
+    background: var(--hover-bg);
+    border: none;
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-player-btn:hover {
+    background: var(--toggle-bg);
+    color: var(--text-primary);
 }
 
 .status-header {
@@ -534,11 +618,11 @@ body {
 }
 
 .feature-card {
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--nav-bg);
     backdrop-filter: blur(10px);
     padding: 40px;
     border-radius: 25px;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--surface-border);
     transition: all 0.3s ease;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
@@ -546,7 +630,7 @@ body {
 .feature-card:hover {
     transform: translateY(-10px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-    background: white;
+    background: var(--card-bg);
 }
 
 .feature-icon {
@@ -593,7 +677,7 @@ body {
     display: flex;
     align-items: center;
     gap: 15px;
-    background: white;
+    background: var(--card-bg);
     padding: 20px 35px;
     border-radius: 50px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
@@ -614,9 +698,9 @@ body {
 
 /* Footer */
 .footer {
-    background: white;
+    background: var(--footer-bg);
     padding: 80px 0 40px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--footer-border);
 }
 
 .footer-content {
@@ -663,7 +747,7 @@ body {
 .footer-bottom {
     text-align: center;
     padding-top: 40px;
-    border-top: 1px solid #f1f5f9;
+    border-top: 1px solid var(--footer-border);
     color: var(--text-secondary);
 }
 
@@ -684,6 +768,18 @@ body {
     padding: 30px;
     text-align: center;
     color: #991b1b;
+}
+
+body.dark-mode .success-card {
+    background: rgba(6, 95, 70, 0.3);
+    border-color: #059669;
+    color: #a7f3d0;
+}
+
+body.dark-mode .error-card {
+    background: rgba(153, 27, 27, 0.3);
+    border-color: #dc2626;
+    color: #fecaca;
 }
 
 .download-link {
@@ -712,7 +808,7 @@ body {
     padding: 15px;
     margin-top: 20px;
     border: 2px solid transparent;
-    background: white;
+    background: var(--card-bg);
     border-radius: 12px;
     cursor: pointer;
     font-weight: 600;
@@ -738,9 +834,36 @@ body {
     .nav-menu {
         display: none;
     }
+
+    .nav-menu.active {
+        display: flex;
+        flex-direction: column;
+        position: absolute;
+        top: 80px;
+        left: 0;
+        width: 100%;
+        background: var(--nav-bg);
+        backdrop-filter: blur(20px);
+        padding: 30px;
+        border-bottom: 1px solid var(--nav-border);
+        gap: 25px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
     
     .nav-toggle {
         display: flex;
+    }
+
+    /* Push theme toggle to the right */
+    .theme-toggle {
+        margin-left: auto;
+        margin-right: 20px;
     }
     
     .hero-title {

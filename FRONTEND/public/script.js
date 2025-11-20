@@ -28,6 +28,35 @@ document.addEventListener('DOMContentLoaded', function () {
     // Hide status panel initially
     statusContainer.classList.remove('show');
 
+    // Theme Toggle Logic
+    const themeToggle = document.getElementById('themeToggle');
+    const body = document.body;
+    const icon = themeToggle.querySelector('i');
+
+    // Check for saved theme preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        body.classList.add('dark-mode');
+        icon.classList.remove('fa-moon');
+        icon.classList.add('fa-sun');
+    }
+
+    themeToggle.addEventListener('click', () => {
+        body.classList.toggle('dark-mode');
+        
+        if (body.classList.contains('dark-mode')) {
+            localStorage.setItem('theme', 'dark');
+            icon.classList.remove('fa-moon');
+            icon.classList.add('fa-sun');
+            showToast('Dark mode enabled', 'info');
+        } else {
+            localStorage.setItem('theme', 'light');
+            icon.classList.remove('fa-sun');
+            icon.classList.add('fa-moon');
+            showToast('Light mode enabled', 'info');
+        }
+    });
+
     // Add input event listeners to remove error states when user starts typing
     document.getElementById('songName').addEventListener('input', function () {
         this.classList.remove('error');
@@ -345,7 +374,9 @@ async function startSimultaneousDownload(songUrl, songName, artist, audioUrl = n
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 songUrl,
-                audioUrl // Send the direct audio URL if available
+                audioUrl, // Send the direct audio URL if available
+                songName,
+                artist
             })
         });
 
@@ -716,15 +747,15 @@ toastStyle.textContent = `
         padding: 16px 20px;
         border-radius: 15px;
         box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-        background: rgba(255, 255, 255, 0.8);
+        background: var(--nav-bg);
         backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.5);
+        border: 1px solid var(--surface-border);
         transform: translateX(100%);
         opacity: 0;
         transition: all 0.3s ease;
         font-weight: 500;
         font-size: 0.95rem;
-        color: #1e293b;
+        color: var(--text-primary);
     }
     
     .toast-success {
