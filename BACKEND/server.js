@@ -72,7 +72,7 @@ app.post('/api/search-and-download', async (req, res) => {
 
 app.post('/api/direct-download', async (req, res) => {
   try {
-    const { songUrl } = req.body;
+    const { songUrl, audioUrl } = req.body;
     
     if (!songUrl || !songUrl.includes('jiosaavn.com/song/')) {
       return res.status(400).json({ error: 'Valid JioSaavn song URL is required' });
@@ -95,7 +95,7 @@ app.post('/api/direct-download', async (req, res) => {
     });
 
     // Start direct download process in background
-    processDirectDownload(downloadId, songUrl);
+    processDirectDownload(downloadId, songUrl, audioUrl);
 
   } catch (error) {
     console.error('Error starting direct download:', error);
@@ -488,7 +488,7 @@ async function processDownload(downloadId, songName, artist) {
 }
 
 // Process direct download in background
-async function processDirectDownload(downloadId, songUrl) {
+async function processDirectDownload(downloadId, songUrl, directAudioUrl = null) {
   try {
     // Update status to downloading
     activeDownloads.set(downloadId, {
@@ -505,9 +505,69 @@ async function processDirectDownload(downloadId, songUrl) {
       downloadDir: path.join(__dirname, '../downloads')
     });
 
-    // Download audio file directly from URL
-    console.log(`🚀 Starting direct download for: ${songUrl} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
-    const downloadedFiles = await scraper.scrapeAudio(songUrl);
+    let downloadedFiles = [];
+
+    // If we have a direct audio URL, try to download it directly first
+    if (directAudioUrl) {
+      console.log(`⚡ FAST TRACK: Using direct audio URL, skipping scraper...`);
+      console.log(`🔗 Direct URL: ${directAudioUrl}`);
+      
+      try {
+        // Use the scraper's internal download method or implement a simple one here
+        // Since scraper.downloadSingleFile is internal/complex, let's use a simple axios download here
+        // or we can use scraper.downloadAudioFiles if we mock the input
+        
+        // Let's use a simple download implementation here to be safe and fast
+        const extension = path.extname(directAudioUrl.split('?')[0]) || '.mp4';
+        const timestamp = Date.now();
+        const fileName = path.join(__dirname, '../downloads', `audio_${timestamp}${extension}`);
+        
+        // Ensure downloads dir exists
+        if (!fs.existsSync(path.join(__dirname, '../downloads'))) {
+          fs.mkdirSync(path.join(__dirname, '../downloads'), { recursive: true });
+        }
+
+        const response = await axios({
+          url: directAudioUrl,
+          method: 'GET',
+          responseType: 'stream',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://www.jiosaavn.com/',
+            'Accept': 'audio/*,*/*;q=0.1'
+          }
+        });
+
+        const writer = fs.createWriteStream(fileName);
+        response.data.pipe(writer);
+
+        await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+
+        const stats = fs.statSync(fileName);
+        if (stats.size > 1024) {
+          downloadedFiles.push({
+            fileName: fileName,
+            url: directAudioUrl,
+            size: stats.size
+          });
+        } else {
+          fs.unlinkSync(fileName);
+          throw new Error('Downloaded file too small');
+        }
+      } catch (directError) {
+        console.error('❌ Direct URL download failed, falling back to scraper:', directError.message);
+        // Fallback to scraper below
+      }
+    }
+
+    // If direct download didn't happen or failed, use the scraper
+    if (downloadedFiles.length === 0) {
+      console.log(`🚀 Starting audio download for: ${songUrl} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+      downloadedFiles = await scraper.scrapeAudio(songUrl);
+    }
 
     if (downloadedFiles && downloadedFiles.length > 0) {
       const downloadedFile = downloadedFiles[0];
