@@ -14,12 +14,14 @@ const audioSource = document.getElementById('audioSource');
 const playerSongTitle = document.getElementById('playerSongTitle');
 const playerSongArtist = document.getElementById('playerSongArtist');
 const closePlayerBtn = document.getElementById('closePlayerBtn');
+const suggestionsList = document.getElementById('suggestionsList'); // Added suggestions list element
 
 let currentDownloadId = null;
 let currentPreviewId = null;
 let downloadStartTime = null;
 let lastDownloadedSong = null;
 let currentPreviewData = null;
+let debounceTimer; // Added debounce timer
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function () {
@@ -33,6 +35,30 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('artist').addEventListener('input', function () {
         this.classList.remove('error');
+    });
+
+    // Autocomplete functionality
+    const songInput = document.getElementById('songName');
+    
+    songInput.addEventListener('input', function(e) {
+        const query = e.target.value.trim();
+        
+        if (query.length < 2) {
+            suggestionsList.classList.remove('show');
+            return;
+        }
+        
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            fetchSuggestions(query);
+        }, 300);
+    });
+
+    // Close suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!songInput.contains(e.target) && !suggestionsList.contains(e.target)) {
+            suggestionsList.classList.remove('show');
+        }
     });
 
     // Mobile menu toggle functionality
@@ -73,6 +99,8 @@ document.addEventListener('DOMContentLoaded', function () {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('visible');
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
             }
         });
     }, observerOptions);
@@ -80,7 +108,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Observe elements for animation
     const animateElements = document.querySelectorAll('.feature-card, .download-card');
     animateElements.forEach(el => {
-        el.classList.add('fade-in');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+        el.style.transition = 'all 0.6s ease-out';
         observer.observe(el);
     });
 
@@ -90,12 +120,28 @@ document.addEventListener('DOMContentLoaded', function () {
             e.preventDefault();
             const target = document.querySelector(this.getAttribute('href'));
             if (target) {
-                const offsetTop = target.offsetTop - 70; // Account for fixed navbar
+                const offsetTop = target.offsetTop - 100; // Account for fixed navbar
                 window.scrollTo({
                     top: offsetTop,
                     behavior: 'smooth'
                 });
             }
+        });
+    });
+
+    // Interactive Background Shapes
+    document.addEventListener('mousemove', (e) => {
+        const shapes = document.querySelectorAll('.shape');
+        const x = e.clientX / window.innerWidth;
+        const y = e.clientY / window.innerHeight;
+
+        shapes.forEach((shape, index) => {
+            const speed = (index + 1) * 20;
+            const xOffset = (window.innerWidth / 2 - e.clientX) / speed;
+            const yOffset = (window.innerHeight / 2 - e.clientY) / speed;
+            
+            // Apply subtle parallax effect
+            shape.style.transform = `translate(${xOffset}px, ${yOffset}px)`;
         });
     });
 });
@@ -131,10 +177,6 @@ closePlayerBtn.addEventListener('click', function () {
     hideAudioPlayer();
 });
 
-
-
-
-
 // Audio player functions
 function showAudioPlayer(previewData) {
     playerSongTitle.textContent = previewData.songName || 'Unknown Song';
@@ -151,19 +193,32 @@ function showAudioPlayer(previewData) {
     
     // Show player with animation
     audioPlayerContainer.style.display = 'block';
+    audioPlayerContainer.style.opacity = '0';
+    audioPlayerContainer.style.transform = 'translateY(20px)';
+    
+    // Animate in
+    setTimeout(() => {
+        audioPlayerContainer.style.transition = 'all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        audioPlayerContainer.style.opacity = '1';
+        audioPlayerContainer.style.transform = 'translateY(0)';
+    }, 10);
     
     // Store current preview data
     currentPreviewData = previewData;
 }
 
 function hideAudioPlayer() {
-    audioPlayerContainer.style.display = 'none';
-    audioPlayer.pause();
-    audioSource.src = '';
-    currentPreviewData = null;
+    // Animate out
+    audioPlayerContainer.style.opacity = '0';
+    audioPlayerContainer.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+        audioPlayerContainer.style.display = 'none';
+        audioPlayer.pause();
+        audioSource.src = '';
+        currentPreviewData = null;
+    }, 500);
 }
-
-
 
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -205,6 +260,15 @@ async function startPreviewAndDownload(songName, artist) {
         hideAudioPlayer(); // Hide any existing player
         const searchQuery = artist ? `${songName} by ${artist}` : songName;
         updateUIState('searching', `Starting search for "${searchQuery}"...`, 5, 'fas fa-search');
+        
+        // Add subtle animation to the download card
+        const downloadCard = document.querySelector('.download-card');
+        if (downloadCard) {
+            downloadCard.style.boxShadow = '0 35px 70px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(78, 205, 196, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.9)';
+            setTimeout(() => {
+                downloadCard.style.boxShadow = 'var(--glass-shadow)';
+            }, 1000);
+        }
 
         const response = await fetch('/api/preview', {
             method: 'POST',
@@ -244,7 +308,8 @@ async function checkPreviewAndDownloadStatus() {
             // Start both preview and download at the exact same moment
             if (data.songUrl) {
                 // Start download request immediately (no await - let it run parallel)
-                startSimultaneousDownload(data.songUrl, data.songName, data.artist);
+                // Pass the previewUrl (direct audio link) to speed up download
+                startSimultaneousDownload(data.songUrl, data.songName, data.artist, data.previewUrl);
                 
                 // Show preview immediately (both happen together)
                 showAudioPlayer(data);
@@ -266,9 +331,10 @@ async function checkPreviewAndDownloadStatus() {
     }
 }
 
-async function startSimultaneousDownload(songUrl, songName, artist) {
+async function startSimultaneousDownload(songUrl, songName, artist, audioUrl = null) {
     try {
         console.log('🎵 Starting simultaneous preview + download for:', songName);
+        if (audioUrl) console.log('⚡ Using direct audio URL for fast download');
         
         // Don't show status panel again - it's already visible from search
         // Just update the existing status to download
@@ -277,7 +343,10 @@ async function startSimultaneousDownload(songUrl, songName, artist) {
         const response = await fetch('/api/direct-download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songUrl })
+            body: JSON.stringify({ 
+                songUrl,
+                audioUrl // Send the direct audio URL if available
+            })
         });
 
         const data = await response.json();
@@ -298,297 +367,6 @@ async function startSimultaneousDownload(songUrl, songName, artist) {
     } catch (error) {
         console.error('Simultaneous download failed:', error);
         showToast('Preview available, but download failed', 'error');
-    }
-}
-
-async function startDirectDownloadBackground(songUrl, songName, artist) {
-    try {
-        console.log('🚀 Starting background download for:', songName);
-        
-        const response = await fetch('/api/direct-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songUrl })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to start background download');
-        }
-
-        currentDownloadId = data.downloadId;
-        
-        // Start checking download status in background
-        setTimeout(checkBackgroundDownloadStatus, 2000);
-        
-        showToast('Download started in background!', 'success');
-
-    } catch (error) {
-        console.error('Background download failed:', error);
-        showToast('Preview available, but download failed to start', 'error');
-    }
-}
-
-async function checkBackgroundDownloadStatus() {
-    if (!currentDownloadId) return;
-
-    try {
-        const response = await fetch(`/api/download-status/${currentDownloadId}`);
-        const data = await response.json();
-
-        if (data.status === 'completed') {
-            // Update the result container with download link
-            showBackgroundDownloadComplete(data);
-        } else if (data.status === 'failed') {
-            showToast('Background download failed', 'error');
-        } else {
-            // Check again
-            setTimeout(checkBackgroundDownloadStatus, 2000);
-        }
-
-    } catch (error) {
-        console.error('Failed to check background download status');
-    }
-}
-
-function showBackgroundDownloadComplete(data) {
-    // Add download success message to result container
-    resultContainer.innerHTML = `
-        <div class="success-card" style="margin-top: 16px;">
-            <i class="fas fa-check-circle" style="font-size: 24px; margin-bottom: 8px;"></i>
-            <h4 style="margin-bottom: 8px;">Download Ready!</h4>
-            <p style="margin-bottom: 12px; opacity: 0.9; font-size: 0.9rem;">
-                Your song has been processed and is ready to download
-            </p>
-            
-            <div class="download-options">
-                <a href="${data.downloadUrl}" class="download-link primary" download target="_blank">
-                    <i class="fas fa-download"></i>
-                    Download Song
-                </a>
-            </div>
-        </div>
-    `;
-    
-    showToast('Song ready for download!', 'success');
-}
-
-async function startPreview(songName, artist) {
-    try {
-        showStatusPanel();
-        hideAudioPlayer(); // Hide any existing player
-        const searchQuery = artist ? `${songName} by ${artist}` : songName;
-        updateUIState('searching', `Starting preview for "${searchQuery}"...`, 5, 'fas fa-search');
-
-        const response = await fetch('/api/preview', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songName, artist })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to start preview');
-        }
-
-        currentPreviewId = data.previewId;
-        downloadStartTime = Date.now();
-        updateUIState('searching', 'Preview request sent to server...', 10, 'fas fa-paper-plane');
-
-        // Start checking preview status
-        setTimeout(checkPreviewStatus, 500);
-
-    } catch (error) {
-        showError('Failed to start preview: ' + error.message);
-        resetUI();
-    }
-}
-
-async function checkPreviewStatus() {
-    if (!currentPreviewId) return;
-
-    try {
-        const response = await fetch(`/api/download-status/${currentPreviewId}`);
-        const data = await response.json();
-
-        updatePreviewStatus(data);
-
-        if (data.status === 'completed') {
-            showAudioPlayer(data);
-            resetUI();
-        } else if (data.status === 'failed') {
-            showError(data.error || 'Preview failed');
-            resetUI();
-        } else {
-            // Check more frequently for active previews
-            setTimeout(checkPreviewStatus, 1000);
-        }
-
-    } catch (error) {
-        showError('Failed to check preview status');
-        resetUI();
-    }
-}
-
-function updatePreviewStatus(data) {
-    // Calculate progress percentage
-    const progressPercent = Math.round(data.progress || 0);
-    const percentStr = progressPercent > 0 ? ` (${progressPercent}%)` : '';
-
-    // Generate dynamic status messages based on progress and status
-    let statusText = '';
-    let icon = '';
-    let className = '';
-
-    switch (data.status) {
-        case 'searching':
-            if (data.progress < 15) {
-                statusText = `Initializing preview search...${percentStr}`;
-                icon = 'fas fa-cog fa-spin';
-            } else if (data.progress < 25) {
-                statusText = `Searching JioSaavn for "${data.songName || 'your song'}"...${percentStr}`;
-                icon = 'fas fa-search';
-            } else {
-                statusText = `Processing search results...${percentStr}`;
-                icon = 'fas fa-list-ul';
-            }
-            className = 'searching';
-            break;
-
-        case 'extracting':
-            if (data.progress < 40) {
-                statusText = `Found song! Preparing preview...${percentStr}`;
-                icon = 'fas fa-play';
-            } else if (data.progress < 60) {
-                statusText = `Extracting audio stream...${percentStr}`;
-                icon = 'fas fa-music fa-pulse';
-            } else if (data.progress < 80) {
-                statusText = `Getting preview URL...${percentStr}`;
-                icon = 'fas fa-link';
-            } else {
-                statusText = `Finalizing preview...${percentStr}`;
-                icon = 'fas fa-check-circle';
-            }
-            className = 'downloading';
-            break;
-
-        case 'completed':
-            statusText = `Preview ready! (100%)`;
-            icon = 'fas fa-check';
-            className = 'completed';
-            break;
-
-        case 'failed':
-            statusText = 'Preview failed';
-            icon = 'fas fa-times';
-            className = 'failed';
-            break;
-
-        default:
-            statusText = `Processing preview...${percentStr}`;
-            icon = 'fas fa-cog fa-spin';
-            className = 'searching';
-    }
-
-    updateUIState(className, statusText, data.progress || 0, icon);
-}
-
-async function startDirectDownload(songUrl, songName, artist) {
-    try {
-        // Set download button loading state
-        downloadFromPlayerBtn.classList.add('loading');
-        downloadFromPlayerBtn.disabled = true;
-        
-        showStatusPanel();
-        updateUIState('downloading', 'Starting download...', 10, 'fas fa-download');
-
-        const response = await fetch('/api/direct-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songUrl })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to start download');
-        }
-
-        currentDownloadId = data.downloadId;
-        downloadStartTime = Date.now();
-        updateUIState('downloading', 'Download started...', 15, 'fas fa-download');
-
-        // Start checking download status
-        setTimeout(checkDownloadStatus, 500);
-
-    } catch (error) {
-        showError('Failed to start download: ' + error.message);
-        resetUI();
-    }
-}
-
-
-
-async function convertPreviewToDownload(previewId) {
-    try {
-        showStatusPanel();
-        updateUIState('downloading', 'Converting preview to download...', 10, 'fas fa-download');
-
-        const response = await fetch('/api/convert-to-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ previewId })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to convert to download');
-        }
-
-        currentDownloadId = data.downloadId;
-        downloadStartTime = Date.now();
-        updateUIState('downloading', 'Download started...', 15, 'fas fa-download');
-
-        // Start checking download status
-        setTimeout(checkDownloadStatus, 500);
-
-    } catch (error) {
-        showError('Failed to convert to download: ' + error.message);
-        resetUI();
-    }
-}
-
-async function startDownload(songName, artist) {
-    try {
-        showStatusPanel();
-        const searchQuery = artist ? `${songName} by ${artist}` : songName;
-        updateUIState('searching', `Starting search for "${searchQuery}"...`, 5, 'fas fa-rocket');
-
-        const response = await fetch('/api/search-and-download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ songName, artist })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to start download');
-        }
-
-        currentDownloadId = data.downloadId;
-        downloadStartTime = Date.now();
-        updateUIState('searching', 'Search request sent to server...', 10, 'fas fa-paper-plane');
-
-        // Start checking status after a brief delay
-        setTimeout(checkDownloadStatus, 500);
-
-    } catch (error) {
-        showError('Failed to start download: ' + error.message);
-        resetUI();
     }
 }
 
@@ -681,6 +459,69 @@ function updateStatus(data) {
     updateUIState(className, statusText, data.progress || 0, icon);
 }
 
+function updatePreviewStatus(data) {
+    // Calculate progress percentage
+    const progressPercent = Math.round(data.progress || 0);
+    const percentStr = progressPercent > 0 ? ` (${progressPercent}%)` : '';
+
+    // Generate dynamic status messages based on progress and status
+    let statusText = '';
+    let icon = '';
+    let className = '';
+
+    switch (data.status) {
+        case 'searching':
+            if (data.progress < 15) {
+                statusText = `Initializing preview search...${percentStr}`;
+                icon = 'fas fa-cog fa-spin';
+            } else if (data.progress < 25) {
+                statusText = `Searching JioSaavn for "${data.songName || 'your song'}"...${percentStr}`;
+                icon = 'fas fa-search';
+            } else {
+                statusText = `Processing search results...${percentStr}`;
+                icon = 'fas fa-list-ul';
+            }
+            className = 'searching';
+            break;
+
+        case 'extracting':
+            if (data.progress < 40) {
+                statusText = `Found song! Preparing preview...${percentStr}`;
+                icon = 'fas fa-play';
+            } else if (data.progress < 60) {
+                statusText = `Extracting audio stream...${percentStr}`;
+                icon = 'fas fa-music fa-pulse';
+            } else if (data.progress < 80) {
+                statusText = `Getting preview URL...${percentStr}`;
+                icon = 'fas fa-link';
+            } else {
+                statusText = `Finalizing preview...${percentStr}`;
+                icon = 'fas fa-check-circle';
+            }
+            className = 'downloading';
+            break;
+
+        case 'completed':
+            statusText = `Preview ready! (100%)`;
+            icon = 'fas fa-check';
+            className = 'completed';
+            break;
+
+        case 'failed':
+            statusText = 'Preview failed';
+            icon = 'fas fa-times';
+            className = 'failed';
+            break;
+
+        default:
+            statusText = `Processing preview...${percentStr}`;
+            icon = 'fas fa-cog fa-spin';
+            className = 'searching';
+    }
+
+    updateUIState(className, statusText, data.progress || 0, icon);
+}
+
 function updateUIState(status, text, progress, icon = 'fas fa-search') {
     statusIcon.className = `status-icon ${status}`;
     statusIcon.innerHTML = `<i class="${icon}"></i>`;
@@ -695,11 +536,18 @@ function updateUIState(status, text, progress, icon = 'fas fa-search') {
     // Smooth progress bar animation
     const currentProgress = parseInt(progressFill.style.width) || 0;
     animateProgress(currentProgress, progress);
+    
+    // Add pulse effect to progress bar when downloading
+    if (status === 'downloading') {
+        progressFill.style.boxShadow = '0 0 15px rgba(255, 107, 107, 0.8)';
+    } else {
+        progressFill.style.boxShadow = '0 0 15px rgba(255, 107, 107, 0.5)';
+    }
 }
 
 function animateProgress(from, to) {
-    const duration = 500; // 500ms animation
-    const steps = 20;
+    const duration = 600; // 600ms animation
+    const steps = 25;
     const stepSize = (to - from) / steps;
     const stepDuration = duration / steps;
 
@@ -747,6 +595,9 @@ function showSuccess(data) {
             </button>
         </div>
     `;
+    
+    // Add celebration effect
+    showToast('🎉 Download completed successfully!', 'success');
 }
 
 function showError(message) {
@@ -796,29 +647,39 @@ function showStatusPanel() {
 }
 
 function showToast(message, type = 'info') {
+    // Remove any existing toasts
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
     const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : '#7c3aed'};
-        color: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        z-index: 1000;
-        font-weight: 600;
-        max-width: 280px;
-        font-size: 0.9rem;
-        animation: slideInRight 0.3s ease-out;
+    toast.className = `toast-notification toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : type === 'info' ? 'fa-info-circle' : 'fa-bell'}"></i>
+            <span>${message}</span>
+        </div>
     `;
-    toast.textContent = message;
+    
     document.body.appendChild(toast);
-
+    
+    // Animate in
     setTimeout(() => {
-        toast.style.animation = 'slideOutRight 0.3s ease-out';
-        setTimeout(() => document.body.removeChild(toast), 300);
-    }, 1500);
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Auto remove after delay
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
+    }, type === 'error' ? 4000 : 3000);
 }
 
 function resetUI() {
@@ -832,7 +693,7 @@ function setButtonLoading(loading) {
     downloadBtn.disabled = loading;
     if (loading) {
         downloadBtn.classList.add('loading');
-        downloadBtn.innerHTML = `Processing...`;
+        downloadBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing...`;
     } else {
         downloadBtn.classList.remove('loading');
         downloadBtn.innerHTML = `
@@ -842,25 +703,110 @@ function setButtonLoading(loading) {
     }
 }
 
-// Override original functions to include button states
-const originalStartPreview = startPreview;
-
-startPreview = async function (songName, artist) {
-    setButtonLoading(true);
-    return originalStartPreview(songName, artist);
-};
-
-// Add slide animations for toast
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideInRight {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
+// Add custom toast styles with Glassmorphism
+const toastStyle = document.createElement('style');
+toastStyle.textContent = `
+    .toast-notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 10000;
+        min-width: 300px;
+        max-width: 400px;
+        padding: 16px 20px;
+        border-radius: 15px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        transform: translateX(100%);
+        opacity: 0;
+        transition: all 0.3s ease;
+        font-weight: 500;
+        font-size: 0.95rem;
+        color: #1e293b;
     }
-
-    @keyframes slideOutRight {
-        from { transform: translateX(0); opacity: 1; }
-        to { transform: translateX(100%); opacity: 0; }
+    
+    .toast-success {
+        border-left: 4px solid #10b981;
+    }
+    
+    .toast-error {
+        border-left: 4px solid #ef4444;
+    }
+    
+    .toast-info {
+        border-left: 4px solid #3b82f6;
+    }
+    
+    .toast-content {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .toast-success .toast-content i { color: #10b981; }
+    .toast-error .toast-content i { color: #ef4444; }
+    .toast-info .toast-content i { color: #3b82f6; }
+    
+    .toast-content i {
+        font-size: 1.2rem;
     }
 `;
-document.head.appendChild(style);
+document.head.appendChild(toastStyle);
+
+// iTunes API Autocomplete Functions
+async function fetchSuggestions(query) {
+    try {
+        // Use iTunes Search API
+        const response = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=5`);
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+            renderSuggestions(data.results);
+        } else {
+            suggestionsList.classList.remove('show');
+        }
+    } catch (error) {
+        console.error('Error fetching suggestions:', error);
+    }
+}
+
+function renderSuggestions(results) {
+    suggestionsList.innerHTML = '';
+    
+    results.forEach(result => {
+        const li = document.createElement('li');
+        li.className = 'suggestion-item';
+        
+        // Create content
+        const title = document.createElement('div');
+        title.className = 'suggestion-title';
+        title.textContent = result.trackName;
+        
+        const artist = document.createElement('div');
+        artist.className = 'suggestion-artist';
+        artist.textContent = result.artistName;
+        
+        li.appendChild(title);
+        li.appendChild(artist);
+        
+        li.addEventListener('click', () => {
+            selectSuggestion(result);
+        });
+        
+        suggestionsList.appendChild(li);
+    });
+    
+    suggestionsList.classList.add('show');
+}
+
+function selectSuggestion(result) {
+    document.getElementById('songName').value = result.trackName;
+    document.getElementById('artist').value = result.artistName;
+    suggestionsList.classList.remove('show');
+    
+    // Remove error classes if any
+    document.getElementById('songName').classList.remove('error');
+    document.getElementById('artist').classList.remove('error');
+}

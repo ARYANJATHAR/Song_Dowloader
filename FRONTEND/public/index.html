@@ -3,13 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GetMusic - Free Online Music Downloader</title>
+    <title>GetMusic - Creative Audio Studio</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Background Blobs -->
+    <div class="background-shapes">
+        <div class="shape shape-1"></div>
+        <div class="shape shape-2"></div>
+        <div class="shape shape-3"></div>
+    </div>
+    
     <!-- Navigation Bar -->
-    <nav class="navbar">
+    <nav class="navbar" id="navbar">
         <div class="nav-container">
             <div class="nav-logo">
                 <i class="fas fa-music"></i>
@@ -37,8 +47,11 @@
         <div class="hero-container">
             <div class="hero-content">
                 <h1 class="hero-title">Your Music, Anywhere</h1>
-                <p class="hero-subtitle">Download your favorite songs instantly with our fast and reliable music downloader</p>
-                <a href="#download" class="hero-cta">Start Downloading</a>
+                <p class="hero-subtitle">Download your favorite songs instantly with our fast and reliable music downloader. Experience the future of music with crystal clear quality and lightning-fast speeds.</p>
+                <a href="#download" class="hero-cta">
+                    <i class="fas fa-bolt"></i>
+                    Start Downloading
+                </a>
             </div>
         </div>
     </section>
@@ -48,21 +61,24 @@
         <div class="container">
             <div class="download-card">
                 <h2 class="section-title">Download Your Music</h2>
-                <p class="section-subtitle">Enter song details below and get your download instantly</p>
+                <p class="section-subtitle">Enter song details below and get your download instantly. Preview before downloading to ensure you get exactly what you want.</p>
                 
                 <!-- Download Form -->
                 <form id="downloadForm" class="download-form">
-                    <div class="form-group">
+                    <div class="form-group" style="position: relative;">
                         <label for="songName" class="visually-hidden">Song title</label>
                         <input type="text" id="songName" name="songName" class="form-input"
-                               placeholder="Enter song title…" required>
+                               placeholder="Enter song title…" required autocomplete="off">
+                        <ul id="suggestionsList" class="suggestions-list"></ul>
                     </div>
 
                     <div class="form-group">
                         <label for="artist" class="visually-hidden">Artist name</label>
                         <input type="text" id="artist" name="artist" class="form-input"
                                placeholder="Enter artist name…">
-                    </div>                    <div class="button-group">
+                    </div>
+                    
+                    <div class="button-group">
                         <button type="submit" class="download-button" id="downloadBtn">
                             <i class="fas fa-download"></i>
                             Download
@@ -112,7 +128,6 @@
                                 </audio>
                             </div>
                             
-
                         </div>
                     </div>
                 </div>
@@ -124,48 +139,49 @@
     <section id="features" class="features">
         <div class="container">
             <h2 class="section-title">Why Choose GetMusic?</h2>
+            <p class="section-subtitle">Experience the best music downloading service with our cutting-edge technology and user-friendly interface.</p>
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-bolt"></i>
                     </div>
                     <h3>Lightning Fast</h3>
-                    <p>Download your favorite songs in seconds with our optimized servers</p>
+                    <p>Download your favorite songs in seconds with our optimized servers and advanced streaming technology.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-shield-alt"></i>
                     </div>
                     <h3>100% Secure</h3>
-                    <p>Your privacy is our priority. All downloads are completely secure</p>
+                    <p>Your privacy is our priority. All downloads are completely secure with end-to-end encryption.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-mobile-alt"></i>
                     </div>
                     <h3>Mobile Friendly</h3>
-                    <p>Works perfectly on all devices - desktop, tablet, and mobile</p>
+                    <p>Works perfectly on all devices - desktop, tablet, and mobile. Download anywhere, anytime.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-music"></i>
                     </div>
                     <h3>High Quality</h3>
-                    <p>Get your music in the best available quality, crystal clear sound</p>
+                    <p>Get your music in the best available quality, crystal clear sound with up to 320kbps bitrate.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-clock"></i>
                     </div>
                     <h3>24/7 Available</h3>
-                    <p>Our service is available round the clock, download anytime</p>
+                    <p>Our service is available round the clock with 99.9% uptime. Download anytime you want.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-heart"></i>
                     </div>
                     <h3>Completely Free</h3>
-                    <p>No hidden charges, no subscriptions. Enjoy unlimited downloads</p>
+                    <p>No hidden charges, no subscriptions. Enjoy unlimited downloads with no restrictions.</p>
                 </div>
             </div>
         </div>
@@ -175,11 +191,11 @@
     <section id="contact" class="contact">
         <div class="container">
             <h2 class="section-title">Get In Touch</h2>
-            <p class="section-subtitle">Have questions or need support? We're here to help!</p>
+            <p class="section-subtitle">Have questions or need support? We're here to help! Reach out to us anytime.</p>
             <div class="contact-info">
                 <div class="contact-item">
                     <i class="fas fa-envelope"></i>
-    <span>support@get-music.app</span>
+                    <span>support@get-music.app</span>
                 </div>
                 <div class="contact-item">
                     <i class="fas fa-globe"></i>
@@ -202,7 +218,7 @@
                         <i class="fas fa-music"></i>
                         <span>GetMusic</span>
                     </div>
-                    <p>Your ultimate destination for music downloads</p>
+                    <p>Your ultimate destination for music downloads. We make it easy to discover, preview, and download your favorite songs with just a few clicks.</p>
                 </div>
                 <div class="footer-links">
                     <h4>Quick Links</h4>
@@ -215,7 +231,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 GetMusic. All rights reserved.</p>
+                <p>&copy; 2025 GetMusic. All rights reserved. Made with <i class="fas fa-heart" style="color: #ff6b6b;"></i> for music lovers.</p>
             </div>
         </div>
     </footer>
