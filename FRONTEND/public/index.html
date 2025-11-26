@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GetMusic - Creative Audio Studio</title>
+    <title>GetMusic - Download Music</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,63 +25,40 @@
                 <i class="fas fa-music"></i>
                 <span>GetMusic</span>
             </div>
-            <ul class="nav-menu" id="navMenu">
-                <li><a href="#home">Home</a></li>
-                <li><a href="#features">Features</a></li>
-                <li><a href="#download">Download</a></li>
-                <li><a href="#contact">Contact</a></li>
-            </ul>
             
             <!-- Theme Toggle -->
             <button class="theme-toggle" id="themeToggle" aria-label="Toggle Dark Mode">
                 <i class="fas fa-moon"></i>
             </button>
-
-            <div class="nav-toggle" id="navToggle">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <section id="home" class="hero">
-        <div class="hero-background">
-            <div class="hero-overlay"></div>
-        </div>
-        <div class="hero-container">
+    <!-- Main Section - Hero + Download Combined -->
+    <section id="home" class="main-section">
+        <div class="main-container">
+            <!-- Left Side - Hero Content -->
             <div class="hero-content">
-                <h1 class="hero-title">Your Music, Anywhere</h1>
-                <p class="hero-subtitle">Download your favorite songs instantly with our fast and reliable music downloader. Experience the future of music with crystal clear quality and lightning-fast speeds.</p>
-                <a href="#download" class="hero-cta">
-                    <i class="fas fa-bolt"></i>
-                    Start Downloading
-                </a>
+                <h1 class="hero-title">Your Music, <span>Anywhere</span></h1>
+                <p class="hero-subtitle">Download your favorite songs instantly with crystal clear quality and lightning-fast speeds.</p>
             </div>
-        </div>
-    </section>
 
-    <!-- Download Section -->
-    <section id="download" class="download-section">
-        <div class="container">
+            <!-- Right Side - Download Card -->
             <div class="download-card">
-                <h2 class="section-title">Download Your Music</h2>
-                <p class="section-subtitle">Enter song details below and get your download instantly. Preview before downloading to ensure you get exactly what you want.</p>
+                <h2 class="card-title">Download Your Music</h2>
                 
                 <!-- Download Form -->
                 <form id="downloadForm" class="download-form">
-                    <div class="form-group" style="position: relative;">
+                    <div class="form-group">
                         <label for="songName" class="visually-hidden">Song title</label>
                         <input type="text" id="songName" name="songName" class="form-input"
-                               placeholder="Enter song title…" required autocomplete="off">
+                               placeholder="Song title" required autocomplete="off">
                         <ul id="suggestionsList" class="suggestions-list"></ul>
                     </div>
 
                     <div class="form-group">
                         <label for="artist" class="visually-hidden">Artist name</label>
                         <input type="text" id="artist" name="artist" class="form-input"
-                               placeholder="Enter artist name…">
+                               placeholder="Artist name">
                     </div>
                     
                     <div class="button-group">
@@ -109,7 +86,13 @@
                         <div class="progress-bar">
                             <div class="progress-fill" id="progressFill"></div>
                         </div>
-                        <div class="progress-text" id="progressText">0%</div>
+                        <div class="progress-info">
+                            <div class="download-indicator" id="downloadIndicator">
+                                <div class="buffer-bar"></div>
+                                <span class="indicator-text">Downloading...</span>
+                            </div>
+                            <div class="progress-text" id="progressText">0%</div>
+                        </div>
                     </div>
                     
                     <div class="result-container" id="resultContainer"></div>
@@ -140,107 +123,6 @@
             </div>
         </div>
     </section>
-
-    <!-- Features Section -->
-    <section id="features" class="features">
-        <div class="container">
-            <h2 class="section-title">Why Choose GetMusic?</h2>
-            <p class="section-subtitle">Experience the best music downloading service with our cutting-edge technology and user-friendly interface.</p>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <h3>Lightning Fast</h3>
-                    <p>Download your favorite songs in seconds with our optimized servers and advanced streaming technology.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <h3>100% Secure</h3>
-                    <p>Your privacy is our priority. All downloads are completely secure with end-to-end encryption.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-mobile-alt"></i>
-                    </div>
-                    <h3>Mobile Friendly</h3>
-                    <p>Works perfectly on all devices - desktop, tablet, and mobile. Download anywhere, anytime.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-music"></i>
-                    </div>
-                    <h3>High Quality</h3>
-                    <p>Get your music in the best available quality, crystal clear sound with up to 320kbps bitrate.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <h3>24/7 Available</h3>
-                    <p>Our service is available round the clock with 99.9% uptime. Download anytime you want.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">
-                        <i class="fas fa-heart"></i>
-                    </div>
-                    <h3>Completely Free</h3>
-                    <p>No hidden charges, no subscriptions. Enjoy unlimited downloads with no restrictions.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Contact Section -->
-    <section id="contact" class="contact">
-        <div class="container">
-            <h2 class="section-title">Get In Touch</h2>
-            <p class="section-subtitle">Have questions or need support? We're here to help! Reach out to us anytime.</p>
-            <div class="contact-info">
-                <div class="contact-item">
-                    <i class="fas fa-envelope"></i>
-                    <span>support@get-music.app</span>
-                </div>
-                <div class="contact-item">
-                    <i class="fas fa-globe"></i>
-                    <span>Available worldwide</span>
-                </div>
-                <div class="contact-item">
-                    <i class="fas fa-clock"></i>
-                    <span>24/7 Support</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
-                    <div class="nav-logo">
-                        <i class="fas fa-music"></i>
-                        <span>GetMusic</span>
-                    </div>
-                    <p>Your ultimate destination for music downloads. We make it easy to discover, preview, and download your favorite songs with just a few clicks.</p>
-                </div>
-                <div class="footer-links">
-                    <h4>Quick Links</h4>
-                    <ul>
-                        <li><a href="#home">Home</a></li>
-                        <li><a href="#features">Features</a></li>
-                        <li><a href="#download">Download</a></li>
-                        <li><a href="#contact">Contact</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2025 GetMusic. All rights reserved. Made with <i class="fas fa-heart" style="color: #ff6b6b;"></i> for music lovers.</p>
-            </div>
-        </div>
-    </footer>
 
     <script src="script.js"></script>
 </body>

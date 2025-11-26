@@ -48,12 +48,10 @@ document.addEventListener('DOMContentLoaded', function () {
             localStorage.setItem('theme', 'dark');
             icon.classList.remove('fa-moon');
             icon.classList.add('fa-sun');
-            showToast('Dark mode enabled', 'info');
         } else {
             localStorage.setItem('theme', 'light');
             icon.classList.remove('fa-sun');
             icon.classList.add('fa-moon');
-            showToast('Light mode enabled', 'info');
         }
     });
 
@@ -90,79 +88,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Mobile menu toggle functionality
-    const navToggle = document.getElementById('navToggle');
-    const navMenu = document.getElementById('navMenu');
-
-    if (navToggle && navMenu) {
-        navToggle.addEventListener('click', function () {
-            navToggle.classList.toggle('active');
-            navMenu.classList.toggle('active');
-        });
-
-        // Close menu when clicking on a link
-        const navLinks = navMenu.querySelectorAll('a');
-        navLinks.forEach(link => {
-            link.addEventListener('click', function () {
-                navToggle.classList.remove('active');
-                navMenu.classList.remove('active');
-            });
-        });
-
-        // Close menu when clicking outside
-        document.addEventListener('click', function (e) {
-            if (!navToggle.contains(e.target) && !navMenu.contains(e.target)) {
-                navToggle.classList.remove('active');
-                navMenu.classList.remove('active');
-            }
-        });
+    // Animate download card on load
+    const downloadCard = document.querySelector('.download-card');
+    if (downloadCard) {
+        downloadCard.style.opacity = '0';
+        downloadCard.style.transform = 'translateY(20px)';
+        downloadCard.style.transition = 'all 0.6s ease-out';
+        setTimeout(() => {
+            downloadCard.style.opacity = '1';
+            downloadCard.style.transform = 'translateY(0)';
+        }, 100);
     }
-
-    // Scroll animations
-    const observerOptions = {
-        threshold: 0.1,
-        rootMargin: '0px 0px -50px 0px'
-    };
-
-    const observer = new IntersectionObserver(function (entries) {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
-            }
-        });
-    }, observerOptions);
-
-    // Observe elements for animation
-    const animateElements = document.querySelectorAll('.feature-card, .download-card');
-    animateElements.forEach(el => {
-        el.style.opacity = '0';
-        el.style.transform = 'translateY(20px)';
-        el.style.transition = 'all 0.6s ease-out';
-        observer.observe(el);
-    });
-
-    // Smooth scrolling for navigation links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                const offsetTop = target.offsetTop - 100; // Account for fixed navbar
-                window.scrollTo({
-                    top: offsetTop,
-                    behavior: 'smooth'
-                });
-            }
-        });
-    });
 
     // Interactive Background Shapes
     document.addEventListener('mousemove', (e) => {
         const shapes = document.querySelectorAll('.shape');
-        const x = e.clientX / window.innerWidth;
-        const y = e.clientY / window.innerHeight;
 
         shapes.forEach((shape, index) => {
             const speed = (index + 1) * 20;
@@ -179,7 +119,6 @@ document.addEventListener('DOMContentLoaded', function () {
 clearBtn.addEventListener('click', function () {
     clearForm();
     hideAudioPlayer();
-    showToast('Form cleared!', 'info');
 });
 
 // Clear form function
@@ -216,8 +155,6 @@ function showAudioPlayer(previewData) {
         const proxyUrl = `/api/proxy-audio?url=${encodeURIComponent(previewData.previewUrl)}`;
         audioSource.src = proxyUrl;
         audioPlayer.load();
-        
-        showToast('Preview & Download starting together!', 'success');
     }
     
     // Show player with animation
@@ -261,14 +198,12 @@ form.addEventListener('submit', async (e) => {
 
     // Validate that both fields are filled
     if (!songName) {
-        showToast('Please enter a song name', 'error');
         document.getElementById('songName').classList.add('error');
         document.getElementById('songName').focus();
         return;
     }
 
     if (!artist) {
-        showToast('Please enter an artist name', 'error');
         document.getElementById('artist').classList.add('error');
         document.getElementById('artist').focus();
         return;
@@ -392,12 +327,9 @@ async function startSimultaneousDownload(songUrl, songName, artist, audioUrl = n
         
         // Start checking download status immediately
         setTimeout(checkDownloadStatus, 1000);
-        
-        showToast('Preview & Download both active!', 'success');
 
     } catch (error) {
         console.error('Simultaneous download failed:', error);
-        showToast('Preview available, but download failed', 'error');
     }
 }
 
@@ -564,6 +496,16 @@ function updateUIState(status, text, progress, icon = 'fas fa-search') {
         progressText.textContent = `${Math.round(progress)}%`;
     }
 
+    // Show/hide download indicator
+    const downloadIndicator = document.getElementById('downloadIndicator');
+    if (downloadIndicator) {
+        if (status === 'downloading' || status === 'searching') {
+            downloadIndicator.classList.add('active');
+        } else {
+            downloadIndicator.classList.remove('active');
+        }
+    }
+
     // Smooth progress bar animation
     const currentProgress = parseInt(progressFill.style.width) || 0;
     animateProgress(currentProgress, progress);
@@ -626,9 +568,6 @@ function showSuccess(data) {
             </button>
         </div>
     `;
-    
-    // Add celebration effect
-    showToast('🎉 Download completed successfully!', 'success');
 }
 
 function showError(message) {
@@ -655,7 +594,6 @@ function showError(message) {
 function startNewDownload() {
     clearForm();
     document.getElementById('songName').focus();
-    showToast('Ready for new download!', 'success');
 }
 
 // Function to retry the last download
@@ -666,51 +604,12 @@ function retryLastDownload() {
         resultContainer.innerHTML = '';
         statusContainer.classList.remove('show');
         resetUI();
-        showToast('Form restored. Click Download to retry!', 'info');
-    } else {
-        showToast('No previous download to retry', 'error');
     }
 }
 
 function showStatusPanel() {
     statusContainer.classList.add('show');
     resultContainer.innerHTML = '';
-}
-
-function showToast(message, type = 'info') {
-    // Remove any existing toasts
-    const existingToast = document.querySelector('.toast-notification');
-    if (existingToast) {
-        existingToast.remove();
-    }
-    
-    const toast = document.createElement('div');
-    toast.className = `toast-notification toast-${type}`;
-    toast.innerHTML = `
-        <div class="toast-content">
-            <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : type === 'success' ? 'fa-check-circle' : type === 'info' ? 'fa-info-circle' : 'fa-bell'}"></i>
-            <span>${message}</span>
-        </div>
-    `;
-    
-    document.body.appendChild(toast);
-    
-    // Animate in
-    setTimeout(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translateX(0)';
-    }, 10);
-    
-    // Auto remove after delay
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toast.parentNode.removeChild(toast);
-            }
-        }, 300);
-    }, type === 'error' ? 4000 : 3000);
 }
 
 function resetUI() {
@@ -733,58 +632,6 @@ function setButtonLoading(loading) {
         `;
     }
 }
-
-// Add custom toast styles with Glassmorphism
-const toastStyle = document.createElement('style');
-toastStyle.textContent = `
-    .toast-notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 10000;
-        min-width: 300px;
-        max-width: 400px;
-        padding: 16px 20px;
-        border-radius: 15px;
-        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-        background: var(--nav-bg);
-        backdrop-filter: blur(10px);
-        border: 1px solid var(--surface-border);
-        transform: translateX(100%);
-        opacity: 0;
-        transition: all 0.3s ease;
-        font-weight: 500;
-        font-size: 0.95rem;
-        color: var(--text-primary);
-    }
-    
-    .toast-success {
-        border-left: 4px solid #10b981;
-    }
-    
-    .toast-error {
-        border-left: 4px solid #ef4444;
-    }
-    
-    .toast-info {
-        border-left: 4px solid #3b82f6;
-    }
-    
-    .toast-content {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    
-    .toast-success .toast-content i { color: #10b981; }
-    .toast-error .toast-content i { color: #ef4444; }
-    .toast-info .toast-content i { color: #3b82f6; }
-    
-    .toast-content i {
-        font-size: 1.2rem;
-    }
-`;
-document.head.appendChild(toastStyle);
 
 // iTunes API Autocomplete Functions
 async function fetchSuggestions(query) {
