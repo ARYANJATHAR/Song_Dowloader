@@ -73,9 +73,10 @@ body {
     line-height: 1.6;
     color: var(--text-primary);
     background-color: var(--bg-color);
-    overflow: hidden;
-    height: 100vh;
+    overflow-x: hidden;
+    min-height: 100vh;
     transition: background-color 0.3s ease, color 0.3s ease;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Minimal Background */
@@ -240,12 +241,15 @@ body {
 
 /* Main Section - Single Page Layout */
 .main-section {
-    height: calc(100vh - 64px);
+    min-height: calc(100vh - 64px);
+    min-height: calc(100dvh - 64px); /* Dynamic viewport height for mobile browsers */
     margin-top: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 40px;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .main-container {
@@ -727,7 +731,7 @@ body.dark-mode .error-card {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Mobile Responsive */
+/* Tablet Responsive */
 @media (max-width: 900px) {
     .main-container {
         flex-direction: column;
@@ -739,7 +743,9 @@ body.dark-mode .error-card {
         height: auto;
         min-height: calc(100vh - 64px);
         overflow-y: auto;
+        overflow-x: hidden;
         padding: 30px 20px;
+        -webkit-overflow-scrolling: touch;
     }
     
     .hero-content {
@@ -762,5 +768,231 @@ body.dark-mode .error-card {
     
     .shape {
         opacity: 0.2;
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+    body {
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    
+    .navbar {
+        height: 56px;
+    }
+    
+    .nav-container {
+        height: 56px;
+        padding: 0 16px;
+    }
+    
+    .nav-logo {
+        font-size: 1.1rem;
+        gap: 8px;
+    }
+    
+    .nav-logo i {
+        font-size: 1.25rem;
+    }
+    
+    .main-section {
+        margin-top: 56px;
+        min-height: calc(100vh - 56px);
+        padding: 20px 16px;
+        display: block;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    
+    .main-container {
+        flex-direction: column;
+        gap: 24px;
+        padding: 0;
+        align-items: stretch;
+    }
+    
+    .hero-content {
+        text-align: center;
+        padding: 0;
+        margin-bottom: 8px;
+    }
+    
+    .hero-title {
+        font-size: 1.75rem;
+        margin-bottom: 12px;
+    }
+    
+    .hero-subtitle {
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    
+    .download-card {
+        padding: 20px;
+        border-radius: 14px;
+        margin-bottom: 20px;
+    }
+    
+    .card-title {
+        font-size: 1rem;
+        margin-bottom: 16px;
+    }
+    
+    .form-input {
+        padding: 12px 14px;
+        font-size: 16px; /* Prevents iOS zoom on focus */
+        border-radius: 8px;
+    }
+    
+    .form-group {
+        margin-bottom: 10px;
+    }
+    
+    .button-group {
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    
+    .download-button,
+    .clear-button {
+        padding: 14px;
+        font-size: 0.95rem;
+        border-radius: 8px;
+        width: 100%;
+    }
+    
+    .status-panel {
+        padding: 14px;
+        margin-top: 16px;
+    }
+    
+    .status-header {
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    
+    .status-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 0.85rem;
+    }
+    
+    .status-text {
+        font-size: 0.85rem;
+    }
+    
+    .audio-player-container {
+        padding: 10px;
+        margin-top: 10px;
+    }
+    
+    .song-info h3 {
+        font-size: 0.8rem;
+    }
+    
+    .song-info p {
+        font-size: 0.7rem;
+    }
+    
+    audio {
+        height: 40px;
+    }
+    
+    .suggestions-list {
+        max-height: 200px;
+        border-radius: 10px;
+    }
+    
+    .suggestion-item {
+        padding: 10px 14px;
+    }
+    
+    .suggestion-title {
+        font-size: 0.85rem;
+    }
+    
+    .suggestion-artist {
+        font-size: 0.75rem;
+    }
+    
+    .success-card,
+    .error-card {
+        padding: 14px;
+    }
+    
+    .download-link {
+        padding: 10px 16px;
+        font-size: 0.8rem;
+    }
+    
+    .download-another-button,
+    .retry-button {
+        padding: 10px;
+        font-size: 0.85rem;
+    }
+    
+    .shape-1,
+    .shape-2 {
+        opacity: 0.15;
+        filter: blur(80px);
+    }
+    
+    .shape-1 {
+        width: 300px;
+        height: 300px;
+    }
+    
+    .shape-2 {
+        width: 250px;
+        height: 250px;
+    }
+    
+    .background-shapes {
+        opacity: 0.3;
+    }
+}
+
+/* Extra small devices */
+@media (max-width: 375px) {
+    .hero-title {
+        font-size: 1.5rem;
+    }
+    
+    .hero-subtitle {
+        font-size: 0.9rem;
+    }
+    
+    .download-card {
+        padding: 16px;
+    }
+    
+    .form-input {
+        padding: 11px 12px;
+    }
+}
+
+/* Landscape mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+    .main-section {
+        padding: 16px;
+    }
+    
+    .main-container {
+        flex-direction: row;
+        gap: 20px;
+    }
+    
+    .hero-content {
+        text-align: left;
+    }
+    
+    .hero-title {
+        font-size: 1.5rem;
+    }
+    
+    .hero-subtitle {
+        font-size: 0.85rem;
     }
 }
