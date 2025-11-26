@@ -159,6 +159,11 @@ app.post('/api/direct-download', async (req, res) => {
   try {
     const { songUrl, audioUrl, songName, artist } = req.body;
     
+    console.log(`📥 Direct download request received:`);
+    console.log(`   Song URL: ${songUrl}`);
+    console.log(`   Audio URL: ${audioUrl ? '✅ Provided' : '❌ Not provided'}`);
+    console.log(`   Song: ${songName} by ${artist}`);
+    
     if (!songUrl || !songUrl.includes('jiosaavn.com/song/')) {
       return res.status(400).json({ error: 'Valid JioSaavn song URL is required' });
     }
@@ -577,7 +582,7 @@ async function processDownload(downloadId, songName, artist) {
   }
 }
 
-// Process direct download in background
+// Process direct download in background - OPTIMIZED: Uses direct audio URL, no Puppeteer!
 async function processDirectDownload(downloadId, songUrl, directAudioUrl = null) {
   try {
     // Update status to downloading
@@ -588,84 +593,115 @@ async function processDirectDownload(downloadId, songUrl, directAudioUrl = null)
       url: songUrl
     });
 
-    // Initialize scraper for direct download
-    const scraper = new AudioScraper({
-      timeout: 20000,
-      waitForAudio: 8000,
-      downloadDir: path.join(__dirname, '../downloads')
-    });
-
     let downloadedFiles = [];
+    const downloadsDir = path.join(__dirname, '../downloads');
 
-    // If we have a direct audio URL, try to download it directly first
+    // Ensure downloads dir exists
+    if (!fs.existsSync(downloadsDir)) {
+      fs.mkdirSync(downloadsDir, { recursive: true });
+    }
+
+    // FAST PATH: If we have a direct audio URL from preview, use it directly (NO PUPPETEER!)
     if (directAudioUrl) {
-      console.log(`⚡ FAST TRACK: Using direct audio URL, skipping scraper...`);
+      console.log(`⚡ FAST TRACK: Using direct audio URL from preview, NO browser needed!`);
       console.log(`🔗 Direct URL: ${directAudioUrl}`);
       
-      try {
-        // Use the scraper's internal download method or implement a simple one here
-        // Since scraper.downloadSingleFile is internal/complex, let's use a simple axios download here
-        // or we can use scraper.downloadAudioFiles if we mock the input
-        
-        // Let's use a simple download implementation here to be safe and fast
-        const extension = '.mp4';
-        const timestamp = Date.now();
-        const fileName = path.join(__dirname, '../downloads', `audio_${timestamp}${extension}`);
-        
-        // Ensure downloads dir exists
-        if (!fs.existsSync(path.join(__dirname, '../downloads'))) {
-          fs.mkdirSync(path.join(__dirname, '../downloads'), { recursive: true });
-        }
+      // Try multiple quality URLs if the provided one fails
+      const urlsToTry = [directAudioUrl];
+      
+      // Generate alternative quality URLs from the direct URL
+      if (directAudioUrl.includes('_320.mp4')) {
+        urlsToTry.push(directAudioUrl.replace('_320.mp4', '_160.mp4'));
+        urlsToTry.push(directAudioUrl.replace('_320.mp4', '_96.mp4'));
+      } else if (directAudioUrl.includes('_160.mp4')) {
+        urlsToTry.push(directAudioUrl.replace('_160.mp4', '_320.mp4'));
+        urlsToTry.push(directAudioUrl.replace('_160.mp4', '_96.mp4'));
+      } else if (directAudioUrl.includes('_96.mp4')) {
+        urlsToTry.push(directAudioUrl.replace('_96.mp4', '_320.mp4'));
+        urlsToTry.push(directAudioUrl.replace('_96.mp4', '_160.mp4'));
+      }
 
-        const response = await axios({
-          url: directAudioUrl,
-          method: 'GET',
-          responseType: 'stream',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://www.jiosaavn.com/',
-            'Accept': 'audio/*,*/*;q=0.1'
-          }
-        });
+      for (const audioUrl of urlsToTry) {
+        try {
+          console.log(`📥 Trying to download from: ${audioUrl}`);
+          
+          const extension = '.mp4';
+          const timestamp = Date.now();
+          const fileName = path.join(downloadsDir, `audio_${timestamp}${extension}`);
 
-        const writer = fs.createWriteStream(fileName);
-        response.data.pipe(writer);
-
-        await new Promise((resolve, reject) => {
-          writer.on('finish', resolve);
-          writer.on('error', reject);
-        });
-
-        const stats = fs.statSync(fileName);
-        if (stats.size > 1024) {
-          // Fetch metadata separately for direct download
-          const metadata = await fetchMetadataFromUrl(songUrl);
-
-          downloadedFiles.push({
-            fileName: fileName,
-            url: directAudioUrl,
-            size: stats.size,
-            metadata // Store for consistency
+          // Update progress
+          activeDownloads.set(downloadId, {
+            ...activeDownloads.get(downloadId),
+            progress: 50
           });
-        } else {
-          fs.unlinkSync(fileName);
-          throw new Error('Downloaded file too small');
+
+          const response = await axios({
+            url: audioUrl,
+            method: 'GET',
+            responseType: 'stream',
+            timeout: 60000, // 60 second timeout
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': 'https://www.jiosaavn.com/',
+              'Accept': 'audio/*,*/*;q=0.1',
+              'Accept-Encoding': 'identity' // Avoid compression for audio
+            }
+          });
+
+          const writer = fs.createWriteStream(fileName);
+          response.data.pipe(writer);
+
+          await new Promise((resolve, reject) => {
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+
+          const stats = fs.statSync(fileName);
+          
+          // Update progress
+          activeDownloads.set(downloadId, {
+            ...activeDownloads.get(downloadId),
+            progress: 80
+          });
+
+          if (stats.size > 10240) { // At least 10KB for a valid audio file
+            console.log(`✅ Fast download successful: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
+
+            downloadedFiles.push({
+              fileName: fileName,
+              url: audioUrl,
+              size: stats.size
+            });
+            break; // Success! Exit the loop
+          } else {
+            console.log(`⚠️ File too small (${stats.size} bytes), trying next URL...`);
+            fs.unlinkSync(fileName);
+          }
+        } catch (urlError) {
+          console.error(`❌ Failed to download from ${audioUrl}: ${urlError.message}`);
+          // Continue to next URL
         }
-      } catch (directError) {
-        console.error('❌ Direct URL download failed, falling back to scraper:', directError.message);
-        // Fallback to scraper below
       }
     }
 
-    // If direct download didn't happen or failed, use the scraper
+    // FALLBACK: Only use Puppeteer if direct download completely failed
     if (downloadedFiles.length === 0) {
-      console.log(`🚀 Starting audio download for: ${songUrl} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+      console.log(`⚠️ Direct download failed, falling back to Puppeteer scraper...`);
+      console.log(`🚀 Starting browser-based download for: ${songUrl} [${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'}]`);
+      
+      // Initialize scraper only as a last resort
+      const scraper = new AudioScraper({
+        timeout: 30000,
+        waitForAudio: 10000,
+        downloadDir: downloadsDir
+      });
+      
       downloadedFiles = await scraper.scrapeAudio(songUrl);
     }
 
     if (downloadedFiles && downloadedFiles.length > 0) {
       const downloadedFile = downloadedFiles[0];
-      console.log(`✅ Direct download completed: ${downloadedFile.fileName} (${(downloadedFile.size / 1024 / 1024).toFixed(2)} MB)`);
+      console.log(`✅ Download completed: ${downloadedFile.fileName} (${(downloadedFile.size / 1024 / 1024).toFixed(2)} MB)`);
       
       // Update status to completed
       activeDownloads.set(downloadId, {
@@ -678,7 +714,7 @@ async function processDirectDownload(downloadId, songUrl, directAudioUrl = null)
         downloadUrl: `/api/download-file/${downloadId}`
       });
 
-      console.log(`✅ Direct download process completed for: ${songUrl}`);
+      console.log(`✅ Download process completed for: ${songUrl}`);
     } else {
       throw new Error('No audio files found - the page may not contain downloadable audio');
     }

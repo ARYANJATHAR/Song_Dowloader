@@ -271,6 +271,11 @@ async function checkPreviewAndDownloadStatus() {
         if (data.status === 'completed' && data.type === 'preview') {
             // Start both preview and download at the exact same moment
             if (data.songUrl) {
+                console.log('🎵 Preview completed, starting simultaneous download...');
+                console.log('   Song URL:', data.songUrl);
+                console.log('   Preview URL:', data.previewUrl || 'NOT PROVIDED');
+                console.log('   All Audio URLs:', data.audioUrls);
+                
                 // Start download request immediately (no await - let it run parallel)
                 // Pass the previewUrl (direct audio link) to speed up download
                 startSimultaneousDownload(data.songUrl, data.songName, data.artist, data.previewUrl);
