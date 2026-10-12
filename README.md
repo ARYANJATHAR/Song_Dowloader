@@ -5,6 +5,9 @@ suggests matches as you type), pick the artist, press **Download**, and the app 
 the track, lets you preview it in the browser while it downloads, and hands you the
 audio file.
 
+
+https://github.com/user-attachments/assets/e88c108d-20bf-4b1d-9391-32c5fe2b8ff7
+
 ---
 
 ## 🌟 What this project is
